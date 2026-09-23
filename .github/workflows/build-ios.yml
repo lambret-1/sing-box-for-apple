@@ -1,0 +1,63 @@
+name: 构建SFI iOS IPA
+
+on:
+  push:
+    branches: [ dev, main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 下载官方SFI deb包
+        run: |
+          VER="1.14.1"
+          curl -L -o SFI.deb "https://github.com/SagerNet/sing-box/releases/download/v${VER}/SFI-${VER}-iphoneos-arm64.deb"
+          ls -lh SFI.deb
+
+      - name: 解包deb
+        run: |
+          mkdir -p deb_extract
+          cd deb_extract
+          ar x ../SFI.deb
+          tar xJf data.tar.xz
+          APP_PATH=$(find "$(pwd)" -name "*.app" -type d | head -1)
+          echo "APP_PATH=$APP_PATH" >> $GITHUB_ENV
+
+      - name: 修改Bundle ID和应用名
+        run: |
+          APP="${{ env.APP_PATH }}"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier io.nekohasekai.lml" "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleName sing-box" "$APP/Info.plist" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName sing-box" "$APP/Info.plist" 2>/dev/null || true
+          for ext in "$APP"/*.appex; do
+            [ -d "$ext" ] || continue
+            EXT_NAME=$(basename "$ext" .appex)
+            /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier io.nekohasekai.lml.${EXT_NAME}" "$ext/Info.plist" 2>/dev/null || true
+          done
+
+      - name: 强制浅色模式
+        run: |
+          APP="${{ env.APP_PATH }}"
+          /usr/libexec/PlistBuddy -c "Add :UIUserInterfaceStyle string Light" "$APP/Info.plist" 2>/dev/null || \
+          /usr/libexec/PlistBuddy -c "Set :UIUserInterfaceStyle Light" "$APP/Info.plist"
+
+      - name: 打包IPA
+        run: |
+          APP="${{ env.APP_PATH }}"
+          APP_NAME=$(basename "$APP")
+          mkdir -p Payload
+          cp -R "$APP" "Payload/"
+          [ "$APP_NAME" != "sing-box.app" ] && mv "Payload/$APP_NAME" "Payload/sing-box.app"
+          zip -r SFI-unsigned.ipa Payload
+          ls -lh SFI-unsigned.ipa
+
+      - name: 上传IPA产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: SFI-unsigned-ipa
+          path: SFI-unsigned.ipa
+          retention-days: 30
