@@ -29,11 +29,11 @@ public enum SharedPreferences {
     #endif
 
     #if !os(tvOS)
-        public static let includeAllNetworks = Preference<Bool>("include_all_networks", defaultValue: false)
+        public static let includeAllNetworks = Preference<Bool>("include_all_networks", defaultValue: true)
         public static let excludeAPNs = Preference<Bool>("exclude_apns", defaultValue: true)
         public static let excludeLocalNetworks = Preference<Bool>("exclude_local_networks", defaultValue: excludeLocalNetworksByDefault)
         public static let excludeCellularServices = Preference<Bool>("exclude_cellular_services", defaultValue: true)
-        public static let enforceRoutes = Preference<Bool>("enforce_routes", defaultValue: false)
+        public static let enforceRoutes = Preference<Bool>("enforce_routes", defaultValue: true)
         public static let excludeDeviceCommunication = Preference<Bool>("exclude_device_communication", defaultValue: true)
 
     #endif
@@ -54,20 +54,20 @@ public enum SharedPreferences {
 
     public static let maxLogLines = Preference<Int>("max_log_lines", defaultValue: 300)
 
-    public static let powerReportEnabled = Preference<Bool>("power_report_enabled", defaultValue: false)
+    public static let powerReportEnabled = Preference<Bool>("power_report_enabled", defaultValue: true)
 
     #if os(macOS)
-        public static let oomKillerEnabled = Preference<Bool>("oom_killer_enabled", defaultValue: false)
+        public static let oomKillerEnabled = Preference<Bool>("oom_killer_enabled", defaultValue: true)
         public static let oomMemoryLimitMB = Preference<Int>("oom_memory_limit_mb", defaultValue: 50)
-        public static let oomKillerKillConnections = Preference<Bool>("oom_killer_kill_connections", defaultValue: false)
+        public static let oomKillerKillConnections = Preference<Bool>("oom_killer_kill_connections", defaultValue: true)
     #endif
 
     #if os(macOS)
         public static let showMenuBarExtra = Preference<Bool>("show_menu_bar_extra", defaultValue: true)
-        public static let menuBarExtraInBackground = Preference<Bool>("menu_bar_extra_in_background", defaultValue: false)
+        public static let menuBarExtraInBackground = Preference<Bool>("menu_bar_extra_in_background", defaultValue: true)
         public static let menuBarExtraSpeedMode = Preference<Int>("menu_bar_extra_speed_mode_1", defaultValue: MenuBarExtraSpeedMode.enabled.rawValue)
-        public static let startedByUser = Preference<Bool>("started_by_user", defaultValue: false)
-        public static let rootHelperPromptPending = Preference<Bool>("root_helper_prompt_pending", defaultValue: false)
+        public static let startedByUser = Preference<Bool>("started_by_user", defaultValue: true)
+        public static let rootHelperPromptPending = Preference<Bool>("root_helper_prompt_pending", defaultValue: true)
 
         public static func resetMacOS() async {
             try? await batchDelete([
@@ -79,7 +79,7 @@ public enum SharedPreferences {
     #endif
 
     #if os(iOS)
-        public static let networkPermissionRequested = Preference<Bool>("network_permission_requested", defaultValue: false)
+        public static let networkPermissionRequested = Preference<Bool>("network_permission_requested", defaultValue: true)
     #endif
 
     public static let systemProxyEnabled = Preference<Bool>("system_proxy_enabled", defaultValue: true)
@@ -91,9 +91,9 @@ public enum SharedPreferences {
 
     // Profile Override
 
-    public static let excludeDefaultRoute = Preference<Bool>("exclude_default_route", defaultValue: false)
-    public static let autoRouteUseSubRangesByDefault = Preference<Bool>("auto_route_use_sub_ranges_by_default", defaultValue: false)
-    public static let excludeAPNsRoute = Preference<Bool>("exclude_apple_push_notification_services", defaultValue: false)
+    public static let excludeDefaultRoute = Preference<Bool>("exclude_default_route", defaultValue: true)
+    public static let autoRouteUseSubRangesByDefault = Preference<Bool>("auto_route_use_sub_ranges_by_default", defaultValue: true)
+    public static let excludeAPNsRoute = Preference<Bool>("exclude_apple_push_notification_services", defaultValue: true)
 
     public static func resetProfileOverride() async {
         try? await batchDelete([excludeDefaultRoute.name, autoRouteUseSubRangesByDefault.name, excludeAPNsRoute.name])
@@ -110,8 +110,8 @@ public enum SharedPreferences {
 
     // On Demand Rules
 
-    public static let alwaysOn = Preference<Bool>("always_on", defaultValue: false)
-    public static let onDemandEnabled = Preference<Bool>("on_demand_enabled", defaultValue: false)
+    public static let alwaysOn = Preference<Bool>("always_on", defaultValue: true)
+    public static let onDemandEnabled = Preference<Bool>("on_demand_enabled", defaultValue: true)
     public static let onDemandRules = Preference<[OnDemandRule]>("on_demand_rules", defaultValue: [])
 
     public static func resetOnDemandRules() async throws {
@@ -121,8 +121,8 @@ public enum SharedPreferences {
     // Update (macOS standalone)
 
     #if os(macOS)
-        public static let checkUpdateEnabled = Preference<Bool>("check_update_enabled", defaultValue: false)
-        public static let updateCheckPrompted = Preference<Bool>("update_check_prompted", defaultValue: false)
+        public static let checkUpdateEnabled = Preference<Bool>("check_update_enabled", defaultValue: true)
+        public static let updateCheckPrompted = Preference<Bool>("update_check_prompted", defaultValue: true)
         public static let updateTrack = Preference<String>("update_track", defaultValue: "")
         public static let githubToken = Preference<String>("github_token", defaultValue: "")
         public static let cachedUpdateInfo = Preference<String>("cached_update_info", defaultValue: "")
@@ -131,20 +131,20 @@ public enum SharedPreferences {
 
     // Core
 
-    public static let disableDeprecatedWarnings = Preference<Bool>("disable_deprecated_warnings", defaultValue: false)
+    public static let disableDeprecatedWarnings = Preference<Bool>("disable_deprecated_warnings", defaultValue: true)
 
     // Tools
 
     public static let nqConfigURL = Preference<String>("nq_config_url", defaultValue: "")
-    public static let nqSerial = Preference<Bool>("nq_serial", defaultValue: false)
-    public static let nqHttp3 = Preference<Bool>("nq_http3", defaultValue: false)
+    public static let nqSerial = Preference<Bool>("nq_serial", defaultValue: true)
+    public static let nqHttp3 = Preference<Bool>("nq_http3", defaultValue: true)
     public static let nqMaxRuntime = Preference<Int>("nq_max_runtime", defaultValue: 30)
     public static let stunServer = Preference<String>("stun_server", defaultValue: "")
     public static let tailscaleSSHRememberedUsernames = Preference<[String: String]>("tailscale_ssh_remembered_usernames", defaultValue: [:])
     public static let tailscaleSSHRememberedTerminalTypes = Preference<[String: String]>("tailscale_ssh_remembered_terminal_types", defaultValue: [:])
     public static let tailscaleSSHQuickConnectPeers = Preference<Set<String>>("tailscale_ssh_quick_connect_peers", defaultValue: [])
     #if os(macOS)
-        public static let tailscaleSSHForwardAgent = Preference<Bool>("tailscale_ssh_forward_agent", defaultValue: false)
+        public static let tailscaleSSHForwardAgent = Preference<Bool>("tailscale_ssh_forward_agent", defaultValue: true)
     #endif
     public static let tailscaleSSHGhosttyLightTheme = Preference<String>("tailscale_ssh_ghostty_light_theme", defaultValue: "Alabaster")
     public static let tailscaleSSHGhosttyDarkTheme = Preference<String>("tailscale_ssh_ghostty_dark_theme", defaultValue: "Afterglow")
