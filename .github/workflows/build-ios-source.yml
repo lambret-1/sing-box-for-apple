@@ -37,6 +37,19 @@ jobs:
         with:
           go-version: '1.23'
 
+      - name: 安装 gomobile 工具
+        run: |
+          # 安装 gomobile 工具（sing-box 使用 sagernet 分支）
+          echo "安装 gomobile..."
+          go install github.com/sagernet/gomobile/cmd/gomobile@latest
+          export PATH=$PATH:$(go env GOPATH)/bin
+          echo "gomobile 版本:"
+          gomobile version || true
+          echo "初始化 gomobile..."
+          gomobile init
+          echo "gomobile 安装完成"
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+
       - name: 从源码编译 Libbox.xcframework
         run: |
           # 默认 libbox 版本
