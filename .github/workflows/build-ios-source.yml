@@ -32,10 +32,10 @@ jobs:
           xcodebuild -version
           echo "Xcode 路径: $(xcode-select -p)"
 
-      - name: 下载 Libbox.xcframework
+      - name: 下载并提取 Libbox.xcframework
         run: |
           # 默认 libbox 版本
-          DEFAULT_LIBBOX_VER="1.14.1"
+          DEFAULT_LIBBOX_VER="1.14.2"
 
           # 确定 libbox 版本
           if [ -n "${{ github.event.inputs.libbox_version }}" ]; then
@@ -55,61 +55,47 @@ jobs:
           echo "使用 Libbox 版本: $LIBBOX_VER"
           echo "LIBBOX_VER=$LIBBOX_VER" >> $GITHUB_ENV
 
-          # 列出 release 中的可用资产（调试用）
-          echo "=== Release 资产列表 ==="
-          curl -sL "https://api.github.com/repos/SagerNet/sing-box/releases/tags/v${LIBBOX_VER}" | grep '"name"' | head -30
-          echo "========================"
+          # 下载 SFI deb 包（从中提取 Libbox.xcframework）
+          DEB_URL="https://github.com/SagerNet/sing-box/releases/download/v${LIBBOX_VER}/SFI-${LIBBOX_VER}-iphoneos-arm64.deb"
+          echo "下载 SFI deb 包: $DEB_URL"
 
-          # 尝试多个可能的文件名
-          DOWNLOAD_SUCCESS=0
-          for FILENAME in "Libbox.xcframework.zip" "Libbox-ios.xcframework.zip" "Libbox.xcframework-ios.zip" "libbox.xcframework.zip"; do
-            DOWNLOAD_URL="https://github.com/SagerNet/sing-box/releases/download/v${LIBBOX_VER}/${FILENAME}"
-            echo "尝试下载: $DOWNLOAD_URL"
-            HTTP_CODE=$(curl -sL -o Libbox.xcframework.zip -w "%{http_code}" "$DOWNLOAD_URL")
-            echo "HTTP 状态码: $HTTP_CODE"
-            if [ "$HTTP_CODE" = "200" ] && [ -f Libbox.xcframework.zip ] && [ $(stat -f%z Libbox.xcframework.zip) -gt 1000 ]; then
-              echo "下载成功: $FILENAME"
-              DOWNLOAD_SUCCESS=1
-              break
-            fi
-            rm -f Libbox.xcframework.zip
-          done
+          curl -fL --retry 3 --retry-delay 5 -o SFI.deb "$DEB_URL"
+          ls -lh SFI.deb
 
-          if [ $DOWNLOAD_SUCCESS -eq 0 ]; then
-            echo "错误: 所有文件名均下载失败"
-            echo "请手动检查 release 页面: https://github.com/SagerNet/sing-box/releases/tag/v${LIBBOX_VER}"
-            exit 1
-          fi
+          # 解包 deb
+          mkdir -p deb_extract
+          cd deb_extract
+          ar x ../SFI.deb
+          tar xJf data.tar.xz
+          APP_PATH=$(find "$(pwd)" -name "*.app" -type d | head -1)
+          echo "App路径: $APP_PATH"
+          cd ..
 
-          ls -lh Libbox.xcframework.zip
-
-          # 验证是有效的 zip 文件
-          if ! unzip -tq Libbox.xcframework.zip > /dev/null 2>&1; then
-            echo "错误: 下载的文件不是有效的 zip 包"
-            file Libbox.xcframework.zip
-            exit 1
-          fi
-
-          # 解压到项目根目录
-          unzip -q Libbox.xcframework.zip
-          # 检查解压后的目录名
-          if [ -d "Libbox.xcframework" ]; then
-            echo "找到 Libbox.xcframework"
+          # 从 .app 中提取 Libbox.xcframework
+          LIBBOX_IN_APP="$APP_PATH/Frameworks/Libbox.xcframework"
+          if [ -d "$LIBBOX_IN_APP" ]; then
+            echo "从 App 中找到 Libbox.xcframework"
+            cp -R "$LIBBOX_IN_APP" ./
           else
-            echo "未找到 Libbox.xcframework，列出解压内容:"
-            ls -la
-            # 尝试找到 xcframework 目录并重命名
-            XCFW_DIR=$(find . -maxdepth 2 -name "*.xcframework" -type d | head -1)
-            if [ -n "$XCFW_DIR" ]; then
-              echo "找到 $XCFW_DIR，重命名为 Libbox.xcframework"
-              mv "$XCFW_DIR" Libbox.xcframework
+            echo "未在 Frameworks 目录找到，搜索整个 App:"
+            find "$APP_PATH" -name "Libbox.xcframework" -type d
+            LIBBOX_FOUND=$(find "$APP_PATH" -name "Libbox.xcframework" -type d | head -1)
+            if [ -n "$LIBBOX_FOUND" ]; then
+              cp -R "$LIBBOX_FOUND" ./
             else
-              echo "错误: 未找到任何 xcframework 目录"
+              echo "错误: 未找到 Libbox.xcframework"
+              echo "App 内容:"
+              ls -la "$APP_PATH/"
+              ls -la "$APP_PATH/Frameworks/" 2>/dev/null || true
               exit 1
             fi
           fi
+
           ls -la Libbox.xcframework/
-          echo "Libbox.xcframework 下载并解压完成"
+          echo "Libbox.xcframework 提取完成"
+
+          # 清理临时文件
+          rm -rf deb_extract SFI.deb
 
       - name: 安装构建工具
         run: |
