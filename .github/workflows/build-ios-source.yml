@@ -33,13 +33,22 @@ jobs:
 
       - name: 下载 Libbox.xcframework
         run: |
+          # 默认 libbox 版本
+          DEFAULT_LIBBOX_VER="1.14.1"
+
           # 确定 libbox 版本
           if [ -n "${{ github.event.inputs.libbox_version }}" ]; then
             LIBBOX_VER="${{ github.event.inputs.libbox_version }}"
+            echo "使用手动指定版本: $LIBBOX_VER"
           else
-            # 获取最新 release 版本号
-            LIBBOX_VER=$(curl -sL "https://api.github.com/repos/SagerNet/sing-box/releases/latest" | grep '"tag_name"' | sed -E 's/.*"v?([^"]+)".*/\1/')
-            echo "获取到最新版本: $LIBBOX_VER"
+            # 尝试获取最新 release 版本号，失败则使用默认版本
+            LIBBOX_VER=$(curl -sL --max-time 10 "https://api.github.com/repos/SagerNet/sing-box/releases/latest" | grep '"tag_name"' | sed -E 's/.*"v?([^"]+)".*/\1/' | head -1)
+            if [ -z "$LIBBOX_VER" ]; then
+              echo "获取最新版本失败，使用默认版本: $DEFAULT_LIBBOX_VER"
+              LIBBOX_VER="$DEFAULT_LIBBOX_VER"
+            else
+              echo "获取到最新版本: $LIBBOX_VER"
+            fi
           fi
 
           echo "使用 Libbox 版本: $LIBBOX_VER"
@@ -49,8 +58,21 @@ jobs:
           DOWNLOAD_URL="https://github.com/SagerNet/sing-box/releases/download/v${LIBBOX_VER}/Libbox.xcframework.zip"
           echo "下载地址: $DOWNLOAD_URL"
 
-          curl -L -o Libbox.xcframework.zip "$DOWNLOAD_URL"
+          curl -fL --retry 3 --retry-delay 5 -o Libbox.xcframework.zip "$DOWNLOAD_URL"
+          if [ ! -f Libbox.xcframework.zip ] || [ $(stat -f%z Libbox.xcframework.zip) -lt 1000 ]; then
+            echo "下载失败或文件过小，尝试备用文件名 Libbox.xcframework-ios.zip"
+            curl -fL --retry 3 --retry-delay 5 -o Libbox.xcframework.zip "https://github.com/SagerNet/sing-box/releases/download/v${LIBBOX_VER}/Libbox.xcframework-ios.zip" || true
+          fi
+
           ls -lh Libbox.xcframework.zip
+
+          # 验证是有效的 zip 文件
+          if ! unzip -tq Libbox.xcframework.zip > /dev/null 2>&1; then
+            echo "错误: 下载的文件不是有效的 zip 包"
+            file Libbox.xcframework.zip
+            cat Libbox.xcframework.zip | head -5
+            exit 1
+          fi
 
           # 解压到项目根目录
           unzip -q Libbox.xcframework.zip
