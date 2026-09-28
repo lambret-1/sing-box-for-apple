@@ -320,36 +320,39 @@ public struct 新UISettingsView: View {
         NavigationStack {
             List {
                 Section("隧道") {
-                    NavigationLink("配置文件") {
-                        Text("配置文件管理")
+                    NavigationLink {
+                        SettingView()
+                            .navigationTitle("设置")
+                    } label: {
+                        Label("系统设置", systemImage: "gearshape")
                     }
-                    NavigationLink("运行模式") {
-                        Text("运行模式选择")
+                    NavigationLink {
+                        ToolsView()
+                            .navigationTitle("工具")
+                    } label: {
+                        Label("工具", systemImage: "terminal.fill")
                     }
                 }
                 Section("网络") {
-                    NavigationLink("DNS 设置") {
-                        Text("DNS 设置")
+                    NavigationLink {
+                        Text("DNS 设置").navigationTitle("DNS")
+                    } label: {
+                        Label("DNS 设置", systemImage: "network")
                     }
-                    NavigationLink("MITM 解密") {
-                        Text("MITM 解密")
+                    NavigationLink {
+                        Text("MITM 解密").navigationTitle("MITM")
+                    } label: {
+                        Label("MITM 解密", systemImage: "lock.shield")
                     }
-                    NavigationLink("HTTP 抓包") {
-                        Text("HTTP 抓包")
+                    NavigationLink {
+                        Text("HTTP 抓包").navigationTitle("抓包")
+                    } label: {
+                        Label("HTTP 抓包", systemImage: "doc.text.magnifyingglass")
                     }
-                    NavigationLink("重写规则") {
-                        Text("重写规则")
-                    }
-                }
-                Section("工具") {
-                    NavigationLink("测速") {
-                        Text("节点测速")
-                    }
-                    NavigationLink("订阅管理") {
-                        Text("订阅管理")
-                    }
-                    NavigationLink("证书管理") {
-                        Text("证书与描述文件")
+                    NavigationLink {
+                        Text("重写规则").navigationTitle("重写")
+                    } label: {
+                        Label("重写规则", systemImage: "pencil.and.outline")
                     }
                 }
                 Section("关于") {
