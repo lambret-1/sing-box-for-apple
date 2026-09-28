@@ -99,7 +99,7 @@ public extension NavigationPage {
         Group {
             switch self {
             case .dashboard:
-                DashboardView()
+                新UIDashboardView()
             #if !os(tvOS)
                 case .groups:
                     GroupListView()

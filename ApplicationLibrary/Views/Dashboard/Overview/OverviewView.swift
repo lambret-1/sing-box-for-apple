@@ -69,8 +69,6 @@ public struct OverviewView: View {
         switch card {
         case .status, .connections, .uploadTraffic, .downloadTraffic, .clashMode:
             return Variant.screenshotMode || profile.status.isConnected
-        case .cpuUsage, .memoryUsage:
-            return true
         case .httpProxy:
             return (Variant.screenshotMode || profile.status.isConnectedStrict) && systemProxyAvailable
         case .profile:
@@ -93,10 +91,6 @@ public struct OverviewView: View {
         case .downloadTraffic:
             DownloadTrafficCard()
                 .environmentObject(environments.commandClient)
-        case .cpuUsage:
-            CPUUsageCard()
-        case .memoryUsage:
-            MemoryUsageCard()
         case .httpProxy:
             HTTPProxyCard(
                 systemProxyAvailable: $systemProxyAvailable,

@@ -6,8 +6,6 @@ public enum DashboardCard: String, CaseIterable, Identifiable, Codable, Hashable
     case connections
     case uploadTraffic
     case downloadTraffic
-    case cpuUsage
-    case memoryUsage
     case httpProxy
     case clashMode
     case profile
@@ -26,10 +24,6 @@ public enum DashboardCard: String, CaseIterable, Identifiable, Codable, Hashable
             return "Upload"
         case .downloadTraffic:
             return "Download"
-        case .cpuUsage:
-            return "CPU Usage"
-        case .memoryUsage:
-            return "Memory Usage"
         case .httpProxy:
             return "System HTTP Proxy"
         case .clashMode:
@@ -49,10 +43,6 @@ public enum DashboardCard: String, CaseIterable, Identifiable, Codable, Hashable
             return "arrow.up.circle.fill"
         case .downloadTraffic:
             return "arrow.down.circle.fill"
-        case .cpuUsage:
-            return "cpu"
-        case .memoryUsage:
-            return "memorychip"
         case .httpProxy:
             return "network"
         case .clashMode:
@@ -68,8 +58,6 @@ public enum DashboardCard: String, CaseIterable, Identifiable, Codable, Hashable
             return .traffic
         case .status, .connections:
             return .statistics
-        case .cpuUsage, .memoryUsage:
-            return .resource
         case .httpProxy, .clashMode, .profile:
             return nil
         }
@@ -96,12 +84,11 @@ public enum DashboardCard: String, CaseIterable, Identifiable, Codable, Hashable
     }
 
     public static var defaultOrder: [DashboardCard] {
-        [.uploadTraffic, .downloadTraffic, .status, .connections, .cpuUsage, .memoryUsage, .httpProxy, .clashMode, .profile]
+        [.uploadTraffic, .downloadTraffic, .status, .connections, .httpProxy, .clashMode, .profile]
     }
 }
 
 public enum DashboardCardPairGroup {
     case traffic
     case statistics
-    case resource
 }

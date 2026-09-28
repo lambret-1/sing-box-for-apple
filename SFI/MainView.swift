@@ -6,7 +6,6 @@ import SwiftUI
 
 struct MainView: View {
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @EnvironmentObject private var environments: ExtensionEnvironments
     @EnvironmentObject private var sendManager: TaildropSendManager
 
@@ -27,8 +26,6 @@ struct MainView: View {
     @State private var showConnections = false
     @State private var buttonState = ButtonVisibilityState()
     @State private var initializedTabs: Set<NavigationPage> = []
-    @State private var logsAccessoryHeight: CGFloat = 0
-    @State private var remoteServers: [RemoteServer] = []
 
     private let profileEditor: (Binding<String>, Bool) -> AnyView = { text, isEditable in
         AnyView(ProfileEditorWrapperView(text: text, isEditable: isEditable))
@@ -40,7 +37,7 @@ struct MainView: View {
 
     private var tabViewContent: some View {
         TabView(selection: $selection) {
-            ForEach(NavigationPage.tabPages, id: \.self) { page in
+            ForEach(NavigationPage.allCases, id: \.self) { page in
                 NavigationStackCompat {
                     tabContent(for: page)
                 }
@@ -48,113 +45,6 @@ struct MainView: View {
                 .tabItem { page.label }
                 .badge(page == .tools ? environments.toolsBadgeCount + sendManager.failedSessionCount : 0)
             }
-        }
-    }
-
-    private var sidebarPages: [NavigationPage] {
-        var pages: [NavigationPage] = [.dashboard]
-        if buttonState.showGroupsButton {
-            pages.append(.groups)
-        }
-        if buttonState.showConnectionsButton {
-            pages.append(.connections)
-        }
-        pages.append(contentsOf: NavigationPage.sidebarDefaultPages)
-        return pages
-    }
-
-    @available(iOS 18.0, *)
-    private var adaptiveTabViewContent: some View {
-        TabView(selection: $selection) {
-            ForEach(sidebarPages) { page in
-                Tab(value: page) {
-                    sidebarPageContent(for: page)
-                } label: {
-                    page.label
-                }
-                .badge(page == .tools ? environments.toolsBadgeCount + sendManager.failedSessionCount : 0)
-            }
-        }
-        .tabViewStyle(.sidebarAdaptable)
-        .onChangeCompat(of: sidebarPages) { pages in
-            if !pages.contains(selection) {
-                selection = .dashboard
-            }
-        }
-    }
-
-    @available(iOS 16.0, *)
-    private var splitViewContent: some View {
-        NavigationSplitView {
-            SidebarView(selection: $selection)
-        } detail: {
-            sidebarPageContent(for: selection)
-                .id(selection)
-        }
-    }
-
-    private func sidebarPageContent(for page: NavigationPage) -> some View {
-        NavigationStackCompat {
-            page.contentView
-                .navigationTitle(page.title)
-                .toolbar {
-                    if environments.remoteServer != nil || !remoteServers.isEmpty {
-                        ToolbarItem(placement: .topBarLeading) {
-                            remoteControlPicker
-                        }
-                        if #available(iOS 26.0, *) {
-                            ToolbarSpacer(.fixed, placement: .topBarLeading)
-                        }
-                    }
-                    ToolbarItem(placement: .topBarLeading) {
-                        serviceToolbarItem
-                    }
-                }
-        }
-    }
-
-    private var remoteControlPicker: some View {
-        Menu {
-            RemoteControlMenuItems(servers: remoteServers)
-        } label: {
-            Text(environments.remoteServer?.displayName ?? String(localized: "Local Device"))
-        }
-    }
-
-    @ViewBuilder
-    private var serviceToolbarItem: some View {
-        if environments.remoteServer != nil {
-            Button {
-                environments.exitRemoteControl()
-            } label: {
-                HStack(spacing: 8) {
-                    RemoteUptimeText(commandClient: environments.commandClient)
-                    Image(systemName: "antenna.radiowaves.left.and.right.slash")
-                }
-            }
-            .accessibilityLabel("Disconnect")
-        } else {
-            StartStopButton(showsRuntimeDuration: true)
-        }
-    }
-
-    private func reloadRemoteServers() async {
-        remoteServers = await (try? RemoteServerManager.list()) ?? []
-    }
-
-    @ViewBuilder
-    private var rootContent: some View {
-        if #available(iOS 18.0, *), SidebarLayout.isEnabled(horizontalSizeClass) {
-            adaptiveTabViewContent
-        } else if #available(iOS 16.0, *), SidebarLayout.isEnabled(horizontalSizeClass) {
-            splitViewContent
-        } else {
-            tabViewContent
-                .onAppear {
-                    if !NavigationPage.tabPages.contains(selection) {
-                        selection = .dashboard
-                    }
-                }
         }
     }
 
@@ -168,14 +58,16 @@ struct MainView: View {
 
     @ViewBuilder
     private func tabContent(for page: NavigationPage) -> some View {
-        let accessory = accessoryInset
-            .transaction { transaction in
-                if !initializedTabs.contains(page) {
-                    transaction.disablesAnimations = true
-                }
-            }
         let content = page.contentView
             .navigationTitle(page.title)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                accessoryInset
+                    .transaction { transaction in
+                        if !initializedTabs.contains(page) {
+                            transaction.disablesAnimations = true
+                        }
+                    }
+            }
             .onAppear {
                 if !initializedTabs.contains(page) {
                     DispatchQueue.main.async {
@@ -184,23 +76,9 @@ struct MainView: View {
                 }
             }
         if page == .logs {
-            content
-                .navigationBarTitleDisplayMode(.inline)
-                .overlay(alignment: .bottom) {
-                    accessory.background(
-                        GeometryReader { proxy in
-                            Color.clear.preference(key: AccessoryHeightKey.self, value: proxy.size.height)
-                        }
-                    )
-                }
-                .onPreferenceChange(AccessoryHeightKey.self) { newValue in
-                    logsAccessoryHeight = newValue
-                }
-                .environment(\.logBottomInset, logsAccessoryHeight)
+            content.navigationBarTitleDisplayMode(.inline)
         } else {
-            content.safeAreaInset(edge: .bottom, spacing: 0) {
-                accessory
-            }
+            content
         }
     }
 
@@ -230,9 +108,9 @@ struct MainView: View {
     private var statusBarPill: some View {
         bottomAccessoryContent
             .frame(maxWidth: .infinity)
-            .frame(minHeight: 52)
-            .modifier(AccessoryPillBackgroundModifier(cornerRadius: 26))
-            .contentShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+            .frame(height: 44)
+            .modifier(AccessoryPillBackgroundModifier(cornerRadius: 22))
+            .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             .padding(.horizontal, 20)
             .padding(.top, 8)
             .padding(.bottom, 12)
@@ -241,9 +119,9 @@ struct MainView: View {
     private var remoteStatusBarPill: some View {
         remoteAccessoryContent
             .frame(maxWidth: .infinity)
-            .frame(minHeight: 52)
-            .modifier(AccessoryPillBackgroundModifier(cornerRadius: 26))
-            .contentShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+            .frame(height: 44)
+            .modifier(AccessoryPillBackgroundModifier(cornerRadius: 22))
+            .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             .padding(.horizontal, 20)
             .padding(.top, 8)
             .padding(.bottom, 12)
@@ -342,13 +220,9 @@ struct MainView: View {
     }
 
     private var mainBody: some View {
-        rootContent
+        tabViewContent
             .onAppear {
                 updateButtonVisibility()
-                Task { await reloadRemoteServers() }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .remoteServersUpdated)) { _ in
-                Task { await reloadRemoteServers() }
             }
             .onReceive(environments.commandClient.$groups) { _ in
                 Task { @MainActor in updateButtonVisibility() }
@@ -443,13 +317,6 @@ struct MainView: View {
         }
     }
 
-    private struct AccessoryHeightKey: PreferenceKey {
-        static var defaultValue: CGFloat = 0
-        static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-            value = max(value, nextValue())
-        }
-    }
-
     private struct AccessoryInset<StatusBar: View, FAB: View>: View {
         @ObservedObject var profile: ExtensionProfile
         @ViewBuilder let statusBar: () -> StatusBar
@@ -510,30 +377,13 @@ struct MainView: View {
 
     private struct StatusText: View {
         @ObservedObject var profile: ExtensionProfile
-        @EnvironmentObject private var environments: ExtensionEnvironments
 
         var body: some View {
-            VStack(alignment: .leading, spacing: 2) {
-                statusText
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                if profile.status.isConnected {
-                    流量速率文字
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                }
-            }
-            .fixedSize(horizontal: false, vertical: true)
-        }
-
-        /// 实时流量速率文字
-        private var 流量速率文字: Text {
-            let 连接列表 = environments.commandClient.connections
-            let 总上传 = 连接列表.filter { $0.closedAt == nil }.reduce(0) { $0 + $1.upload }
-            let 总下载 = 连接列表.filter { $0.closedAt == nil }.reduce(0) { $0 + $1.download }
-            return Text("↑ \(LibboxFormatBytes(总上传))/s  ↓ \(LibboxFormatBytes(总下载))/s")
+            statusText
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .fixedSize()
         }
 
         private var statusText: Text {
