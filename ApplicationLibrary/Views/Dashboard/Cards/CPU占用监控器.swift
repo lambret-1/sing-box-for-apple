@@ -1,0 +1,164 @@
+import Foundation
+import SwiftUI
+import Combine
+
+#if canImport(UIKit)
+import UIKit
+#endif
+
+/// CPU 占用监控器：定期采样当前进程 CPU 使用率
+@MainActor
+public final class CPU占用监控器: ObservableObject {
+    /// 共享单例
+    public static let 共享 = CPU占用监控器()
+
+    /// 当前 CPU 使用率（0-100）
+    @Published public private(set) var 当前使用率: Double = 0
+
+    /// 采样定时器
+    private var 采样定时器: DispatchSourceTimer?
+    /// 定时器队列
+    private let 定时器队列 = DispatchQueue(label: "io.nekohasekai.sfa.cpuMonitor", qos: .utility)
+
+    /// 上次采样的线程使用时间
+    private var 上次总使用时间: UInt64 = 0
+    /// 上次采样的系统时间
+    private var 上次系统时间: UInt64 = 0
+
+    /// 私有初始化
+    private init() {}
+
+    // MARK: - 开始/停止监控
+
+    /// 开始 CPU 占用监控
+    public func 开始监控(间隔: TimeInterval = 2.0) {
+        停止监控()
+        // 立即采样一次
+        采样CPU使用率()
+
+        let 定时器 = DispatchSource.makeTimerSource(queue: 定时器队列)
+        定时器.schedule(deadline: .now() + 间隔, repeating: 间隔, leeway: .milliseconds(100))
+        定时器.setEventHandler { [weak self] in
+            self?.采样CPU使用率()
+        }
+        定时器.resume()
+        采样定时器 = 定时器
+    }
+
+    /// 停止 CPU 占用监控
+    public func 停止监控() {
+        采样定时器?.cancel()
+        采样定时器 = nil
+    }
+
+    // MARK: - 采样 CPU 使用率
+
+    /// 采样当前进程 CPU 使用率
+    private func 采样CPU使用率() {
+        let 任务 = mach_task_self_
+        var 线程数: mach_msg_type_number_t = 0
+        var 线程列表: thread_act_array_t?
+
+        // 获取所有线程
+        guard task_threads(任务, &线程列表, &线程数) == KERN_SUCCESS else {
+            return
+        }
+
+        var 总使用时间: UInt64 = 0
+
+        // 遍历所有线程，累加用户态和内核态使用时间
+        if let 列表 = 线程列表 {
+            for 索引 in 0..<Int(线程数) {
+                let 线程 = 列表[索引]
+                var 线程信息 = thread_basic_info()
+                var 信息数 = mach_msg_type_number_t(MemoryLayout<thread_basic_info>.size / MemoryLayout<integer_t>.size)
+
+                let 结果 = withUnsafeMutablePointer(to: &线程信息) { 指针 in
+                    指针.withMemoryRebound(to: integer_t.self, capacity: Int(信息数)) { 重绑定指针 in
+                        thread_info(线程, UInt32(THREAD_BASIC_INFO), 重绑定指针, &信息数)
+                    }
+                }
+
+                if 结果 == KERN_SUCCESS {
+                    // 安全转换：seconds 可能为负数，使用 max(0, ...) 避免 UInt64 转换崩溃
+                    let 用户秒 = UInt64(max(0, 线程信息.user_time.seconds))
+                    let 用户微秒 = UInt64(max(0, 线程信息.user_time.microseconds))
+                    let 系统秒 = UInt64(max(0, 线程信息.system_time.seconds))
+                    let 系统微秒 = UInt64(max(0, 线程信息.system_time.microseconds))
+
+                    let 用户时间 = 用户秒 * 1_000_000 + 用户微秒
+                    let 系统时间 = 系统秒 * 1_000_000 + 系统微秒
+                    总使用时间 = 总使用时间 &+ 用户时间 &+ 系统时间
+                }
+            }
+        }
+
+        // 释放线程列表内存
+        if let 列表 = 线程列表, 线程数 > 0 {
+            let 地址 = vm_address_t(UInt(bitPattern: 列表))
+            let 大小 = vm_size_t(Int(线程数) * MemoryLayout<thread_t>.size)
+            vm_deallocate(mach_task_self_, 地址, 大小)
+        }
+
+        // 获取当前系统时间（纳秒）
+        let 当前系统时间 = DispatchTime.now().uptimeNanoseconds
+
+        // 计算 CPU 使用率（使用溢出减法避免下溢崩溃）
+        if 上次总使用时间 > 0 && 上次系统时间 > 0 {
+            let 使用时间差 = 总使用时间 >= 上次总使用时间 ? Double(总使用时间 &- 上次总使用时间) : 0
+            let 系统时间差 = 当前系统时间 >= 上次系统时间 ? Double(当前系统时间 &- 上次系统时间) / 1000 : 0
+
+            if 系统时间差 > 0 {
+                // CPU 使用率 = 使用时间差 / 系统时间差 * 100
+                // 多核 CPU 可能超过 100%，限制在 0-100 范围显示
+                let 使用率 = min(max(使用时间差 / 系统时间差 * 100, 0), 100)
+                DispatchQueue.main.async { [weak self] in
+                    self?.当前使用率 = 使用率
+                }
+            }
+        }
+
+        上次总使用时间 = 总使用时间
+        上次系统时间 = 当前系统时间
+    }
+
+    // MARK: - 显示属性
+
+    /// CPU 使用率等级
+    public var 等级: CPU等级 {
+        switch 当前使用率 {
+        case 0..<30: return .低
+        case 30..<60: return .中
+        case 60..<85: return .高
+        default: return .极高
+        }
+    }
+
+    /// CPU 等级枚举
+    public enum CPU等级 {
+        case 低
+        case 中
+        case 高
+        case 极高
+
+        /// 对应颜色
+        public var 颜色: Color {
+            switch self {
+            case .低: return .green
+            case .中: return .orange
+            case .高: return .red
+            case .极高: return Color(red: 0.8, green: 0.0, blue: 0.0)
+            }
+        }
+
+        /// 等级文字
+        public var 文字: String {
+            switch self {
+            case .低: return "Normal"
+            case .中: return "Medium"
+            case .高: return "High"
+            case .极高: return "Critical"
+            }
+        }
+    }
+}

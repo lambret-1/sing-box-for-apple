@@ -63,6 +63,10 @@ public final class DashboardCardConfiguration: ObservableObject {
         if !cards.contains(.profile) {
             cards.append(.profile)
         }
+        // 自动启用新增的卡片（CPU/内存等）
+        let existingSet = Set(cards)
+        let newCards = DashboardCard.allCases.filter { !existingSet.contains($0) }
+        cards.append(contentsOf: newCards)
         await SharedPreferences.enabledDashboardCards.set(cards.map(\.rawValue))
         return cards
     }
