@@ -32,7 +32,12 @@ jobs:
           xcodebuild -version
           echo "Xcode 路径: $(xcode-select -p)"
 
-      - name: 下载并提取 Libbox.xcframework
+      - name: 安装 Go 环境
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: 从源码编译 Libbox.xcframework
         run: |
           # 默认 libbox 版本
           DEFAULT_LIBBOX_VER="1.14.2"
@@ -52,50 +57,36 @@ jobs:
             fi
           fi
 
-          echo "使用 Libbox 版本: $LIBBOX_VER"
+          echo "使用 sing-box 版本: $LIBBOX_VER"
           echo "LIBBOX_VER=$LIBBOX_VER" >> $GITHUB_ENV
 
-          # 下载 SFI deb 包（从中提取 Libbox.xcframework）
-          DEB_URL="https://github.com/SagerNet/sing-box/releases/download/v${LIBBOX_VER}/SFI-${LIBBOX_VER}-iphoneos-arm64.deb"
-          echo "下载 SFI deb 包: $DEB_URL"
+          # 克隆 sing-box 源码
+          echo "克隆 sing-box v${LIBBOX_VER} 源码..."
+          git clone --depth 1 --branch "v${LIBBOX_VER}" https://github.com/SagerNet/sing-box.git sing-box-src
+          cd sing-box-src
 
-          curl -fL --retry 3 --retry-delay 5 -o SFI.deb "$DEB_URL"
-          ls -lh SFI.deb
+          # 编译 Libbox.xcframework（iOS + 模拟器 + tvOS + macOS）
+          echo "开始编译 Libbox.xcframework，这可能需要 10-20 分钟..."
+          go run ./cmd/internal/build_libbox -target apple
 
-          # 解包 deb
-          mkdir -p deb_extract
-          cd deb_extract
-          ar x ../SFI.deb
-          tar xJf data.tar.xz
-          APP_PATH=$(find "$(pwd)" -name "*.app" -type d | head -1)
-          echo "App路径: $APP_PATH"
-          cd ..
-
-          # 从 .app 中提取 Libbox.xcframework
-          LIBBOX_IN_APP="$APP_PATH/Frameworks/Libbox.xcframework"
-          if [ -d "$LIBBOX_IN_APP" ]; then
-            echo "从 App 中找到 Libbox.xcframework"
-            cp -R "$LIBBOX_IN_APP" ./
-          else
-            echo "未在 Frameworks 目录找到，搜索整个 App:"
-            find "$APP_PATH" -name "Libbox.xcframework" -type d
-            LIBBOX_FOUND=$(find "$APP_PATH" -name "Libbox.xcframework" -type d | head -1)
-            if [ -n "$LIBBOX_FOUND" ]; then
-              cp -R "$LIBBOX_FOUND" ./
-            else
-              echo "错误: 未找到 Libbox.xcframework"
-              echo "App 内容:"
-              ls -la "$APP_PATH/"
-              ls -la "$APP_PATH/Frameworks/" 2>/dev/null || true
-              exit 1
-            fi
+          # 查找生成的 Libbox.xcframework
+          echo "查找编译产物..."
+          LIBBOX_PATH=$(find . -name "Libbox.xcframework" -type d | head -1)
+          if [ -z "$LIBBOX_PATH" ]; then
+            echo "未找到 Libbox.xcframework，列出当前目录:"
+            ls -la
+            find . -name "*.xcframework" -type d
+            exit 1
           fi
 
-          ls -la Libbox.xcframework/
-          echo "Libbox.xcframework 提取完成"
+          echo "找到 Libbox.xcframework: $LIBBOX_PATH"
+          ls -la "$LIBBOX_PATH"
 
-          # 清理临时文件
-          rm -rf deb_extract SFI.deb
+          # 复制到项目根目录
+          cp -R "$LIBBOX_PATH" ../
+          cd ..
+          ls -la Libbox.xcframework/
+          echo "Libbox.xcframework 编译完成"
 
       - name: 安装构建工具
         run: |
