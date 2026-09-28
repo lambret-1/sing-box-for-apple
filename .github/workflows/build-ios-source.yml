@@ -28,13 +28,9 @@ jobs:
 
       - name: 配置 Xcode 版本
         run: |
-          # 显示可用的 Xcode 版本
-          echo "=== 可用 Xcode 版本 ==="
-          ls -la /Applications/ | grep Xcode
-          echo "========================"
-          # 使用默认 Xcode（不切换版本，避免版本不存在）
+          # 显示当前 Xcode 版本
           xcodebuild -version
-          xcrun simctl list devices available | head -3
+          echo "Xcode 路径: $(xcode-select -p)"
 
       - name: 下载 Libbox.xcframework
         run: |
