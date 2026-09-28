@@ -32,35 +32,14 @@ jobs:
           xcodebuild -version
           echo "Xcode 路径: $(xcode-select -p)"
 
-      - name: 安装 Go 环境
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.23'
-
-      - name: 安装 gomobile 工具
+      - name: 确定 Libbox 版本
+        id: libbox_version
         run: |
-          # 安装 gomobile 工具（sing-box 使用 sagernet 分支）
-          echo "安装 gomobile..."
-          go install github.com/sagernet/gomobile/cmd/gomobile@latest
-          export PATH=$PATH:$(go env GOPATH)/bin
-          echo "gomobile 版本:"
-          gomobile version || true
-          echo "初始化 gomobile..."
-          gomobile init
-          echo "gomobile 安装完成"
-          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
-
-      - name: 从源码编译 Libbox.xcframework
-        run: |
-          # 默认 libbox 版本
           DEFAULT_LIBBOX_VER="1.14.2"
-
-          # 确定 libbox 版本
           if [ -n "${{ github.event.inputs.libbox_version }}" ]; then
             LIBBOX_VER="${{ github.event.inputs.libbox_version }}"
             echo "使用手动指定版本: $LIBBOX_VER"
           else
-            # 尝试获取最新 release 版本号，失败则使用默认版本
             LIBBOX_VER=$(curl -sL --max-time 10 "https://api.github.com/repos/SagerNet/sing-box/releases/latest" | grep '"tag_name"' | sed -E 's/.*"v?([^"]+)".*/\1/' | head -1)
             if [ -z "$LIBBOX_VER" ]; then
               echo "获取最新版本失败，使用默认版本: $DEFAULT_LIBBOX_VER"
@@ -69,37 +48,47 @@ jobs:
               echo "获取到最新版本: $LIBBOX_VER"
             fi
           fi
-
-          echo "使用 sing-box 版本: $LIBBOX_VER"
           echo "LIBBOX_VER=$LIBBOX_VER" >> $GITHUB_ENV
+          echo "version=$LIBBOX_VER" >> $GITHUB_OUTPUT
 
-          # 克隆 sing-box 源码
-          echo "克隆 sing-box v${LIBBOX_VER} 源码..."
+      - name: 缓存 Libbox.xcframework
+        id: cache-libbox
+        uses: actions/cache@v4
+        with:
+          path: Libbox.xcframework
+          key: libbox-${{ steps.libbox_version.outputs.version }}
+
+      - name: 安装 Go 和 gomobile（仅缓存未命中时）
+        if: steps.cache-libbox.outputs.cache-hit != 'true'
+        run: |
+          echo "安装 gomobile..."
+          go install github.com/sagernet/gomobile/cmd/gomobile@latest
+          export PATH=$PATH:$(go env GOPATH)/bin
+          gomobile init
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+
+      - name: 从源码编译 Libbox.xcframework（仅缓存未命中时）
+        if: steps.cache-libbox.outputs.cache-hit != 'true'
+        run: |
+          echo "缓存未命中，开始编译 Libbox.xcframework..."
           git clone --depth 1 --branch "v${LIBBOX_VER}" https://github.com/SagerNet/sing-box.git sing-box-src
           cd sing-box-src
-
-          # 编译 Libbox.xcframework（iOS + 模拟器 + tvOS + macOS）
-          echo "开始编译 Libbox.xcframework，这可能需要 10-20 分钟..."
+          export PATH=$PATH:$(go env GOPATH)/bin
           go run ./cmd/internal/build_libbox -target apple
-
-          # 查找生成的 Libbox.xcframework
-          echo "查找编译产物..."
           LIBBOX_PATH=$(find . -name "Libbox.xcframework" -type d | head -1)
           if [ -z "$LIBBOX_PATH" ]; then
-            echo "未找到 Libbox.xcframework，列出当前目录:"
-            ls -la
-            find . -name "*.xcframework" -type d
+            echo "编译失败：未找到 Libbox.xcframework"
             exit 1
           fi
-
-          echo "找到 Libbox.xcframework: $LIBBOX_PATH"
-          ls -la "$LIBBOX_PATH"
-
-          # 复制到项目根目录
           cp -R "$LIBBOX_PATH" ../
           cd ..
+          echo "Libbox.xcframework 编译完成，已保存到缓存"
+
+      - name: 使用缓存的 Libbox.xcframework
+        if: steps.cache-libbox.outputs.cache-hit == 'true'
+        run: |
+          echo "使用缓存的 Libbox.xcframework（版本: ${LIBBOX_VER}）"
           ls -la Libbox.xcframework/
-          echo "Libbox.xcframework 编译完成"
 
       - name: 安装构建工具
         run: |
