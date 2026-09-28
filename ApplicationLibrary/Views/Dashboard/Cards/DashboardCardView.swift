@@ -10,11 +10,11 @@ public struct DashboardCardView<Content: View>: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: title.isEmpty ? 0 : 12) {
+        VStack(alignment: .leading, spacing: title.isEmpty ? 0 : 设计系统.间距.小) {
             if !title.isEmpty {
                 Text(title)
-                    .font(.headline)
-                    .foregroundStyle(.primary)
+                    .font(设计系统.字体.副标题)
+                    .foregroundStyle(设计系统.颜色.文字.主要)
             }
             content()
         }
@@ -22,7 +22,7 @@ public struct DashboardCardView<Content: View>: View {
         #if os(tvOS)
             .padding(EdgeInsets(top: 20, leading: 26, bottom: 20, trailing: 26))
         #else
-            .padding(16)
+            .padding(设计系统.间距.大)
         #endif
             .cardStyle()
     }
