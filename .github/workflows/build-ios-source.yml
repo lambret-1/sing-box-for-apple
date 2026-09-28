@@ -54,14 +54,30 @@ jobs:
           echo "使用 Libbox 版本: $LIBBOX_VER"
           echo "LIBBOX_VER=$LIBBOX_VER" >> $GITHUB_ENV
 
-          # 下载 Libbox.xcframework.zip
-          DOWNLOAD_URL="https://github.com/SagerNet/sing-box/releases/download/v${LIBBOX_VER}/Libbox.xcframework.zip"
-          echo "下载地址: $DOWNLOAD_URL"
+          # 列出 release 中的可用资产（调试用）
+          echo "=== Release 资产列表 ==="
+          curl -sL "https://api.github.com/repos/SagerNet/sing-box/releases/tags/v${LIBBOX_VER}" | grep '"name"' | head -30
+          echo "========================"
 
-          curl -fL --retry 3 --retry-delay 5 -o Libbox.xcframework.zip "$DOWNLOAD_URL"
-          if [ ! -f Libbox.xcframework.zip ] || [ $(stat -f%z Libbox.xcframework.zip) -lt 1000 ]; then
-            echo "下载失败或文件过小，尝试备用文件名 Libbox.xcframework-ios.zip"
-            curl -fL --retry 3 --retry-delay 5 -o Libbox.xcframework.zip "https://github.com/SagerNet/sing-box/releases/download/v${LIBBOX_VER}/Libbox.xcframework-ios.zip" || true
+          # 尝试多个可能的文件名
+          DOWNLOAD_SUCCESS=0
+          for FILENAME in "Libbox.xcframework.zip" "Libbox-ios.xcframework.zip" "Libbox.xcframework-ios.zip" "libbox.xcframework.zip"; do
+            DOWNLOAD_URL="https://github.com/SagerNet/sing-box/releases/download/v${LIBBOX_VER}/${FILENAME}"
+            echo "尝试下载: $DOWNLOAD_URL"
+            HTTP_CODE=$(curl -sL -o Libbox.xcframework.zip -w "%{http_code}" "$DOWNLOAD_URL")
+            echo "HTTP 状态码: $HTTP_CODE"
+            if [ "$HTTP_CODE" = "200" ] && [ -f Libbox.xcframework.zip ] && [ $(stat -f%z Libbox.xcframework.zip) -gt 1000 ]; then
+              echo "下载成功: $FILENAME"
+              DOWNLOAD_SUCCESS=1
+              break
+            fi
+            rm -f Libbox.xcframework.zip
+          done
+
+          if [ $DOWNLOAD_SUCCESS -eq 0 ]; then
+            echo "错误: 所有文件名均下载失败"
+            echo "请手动检查 release 页面: https://github.com/SagerNet/sing-box/releases/tag/v${LIBBOX_VER}"
+            exit 1
           fi
 
           ls -lh Libbox.xcframework.zip
@@ -70,12 +86,27 @@ jobs:
           if ! unzip -tq Libbox.xcframework.zip > /dev/null 2>&1; then
             echo "错误: 下载的文件不是有效的 zip 包"
             file Libbox.xcframework.zip
-            cat Libbox.xcframework.zip | head -5
             exit 1
           fi
 
           # 解压到项目根目录
           unzip -q Libbox.xcframework.zip
+          # 检查解压后的目录名
+          if [ -d "Libbox.xcframework" ]; then
+            echo "找到 Libbox.xcframework"
+          else
+            echo "未找到 Libbox.xcframework，列出解压内容:"
+            ls -la
+            # 尝试找到 xcframework 目录并重命名
+            XCFW_DIR=$(find . -maxdepth 2 -name "*.xcframework" -type d | head -1)
+            if [ -n "$XCFW_DIR" ]; then
+              echo "找到 $XCFW_DIR，重命名为 Libbox.xcframework"
+              mv "$XCFW_DIR" Libbox.xcframework
+            else
+              echo "错误: 未找到任何 xcframework 目录"
+              exit 1
+            fi
+          fi
           ls -la Libbox.xcframework/
           echo "Libbox.xcframework 下载并解压完成"
 
