@@ -230,9 +230,9 @@ struct MainView: View {
     private var statusBarPill: some View {
         bottomAccessoryContent
             .frame(maxWidth: .infinity)
-            .frame(height: 44)
-            .modifier(AccessoryPillBackgroundModifier(cornerRadius: 22))
-            .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .frame(minHeight: 52)
+            .modifier(AccessoryPillBackgroundModifier(cornerRadius: 26))
+            .contentShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
             .padding(.horizontal, 20)
             .padding(.top, 8)
             .padding(.bottom, 12)
@@ -241,9 +241,9 @@ struct MainView: View {
     private var remoteStatusBarPill: some View {
         remoteAccessoryContent
             .frame(maxWidth: .infinity)
-            .frame(height: 44)
-            .modifier(AccessoryPillBackgroundModifier(cornerRadius: 22))
-            .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .frame(minHeight: 52)
+            .modifier(AccessoryPillBackgroundModifier(cornerRadius: 26))
+            .contentShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
             .padding(.horizontal, 20)
             .padding(.top, 8)
             .padding(.bottom, 12)
@@ -510,13 +510,30 @@ struct MainView: View {
 
     private struct StatusText: View {
         @ObservedObject var profile: ExtensionProfile
+        @EnvironmentObject private var environments: ExtensionEnvironments
 
         var body: some View {
-            statusText
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .fixedSize()
+            VStack(alignment: .leading, spacing: 2) {
+                statusText
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                if profile.status.isConnected {
+                    流量速率文字
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+        }
+
+        /// 实时流量速率文字
+        private var 流量速率文字: Text {
+            let 连接列表 = environments.commandClient.connections
+            let 总上传 = 连接列表.filter { $0.closedAt == nil }.reduce(0) { $0 + $1.upload }
+            let 总下载 = 连接列表.filter { $0.closedAt == nil }.reduce(0) { $0 + $1.download }
+            return Text("↑ \(LibboxFormatBytes(总上传))/s  ↓ \(LibboxFormatBytes(总下载))/s")
         }
 
         private var statusText: Text {
