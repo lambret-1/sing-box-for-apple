@@ -196,7 +196,12 @@ jobs:
           ls -la "$APP_PATH/"
           echo "APP_PATH=$APP_PATH" >> $GITHUB_ENV
 
-      - name: 打包未签名 IPA
+      - name: 安装ldid伪签名工具
+        run: |
+          brew install ldid 2>&1 | tail -5 || echo "brew安装ldid失败，尝试其他方式"
+          which ldid && ldid -v || true
+
+      - name: 打包未签名IPA（嵌入entitlements）
         run: |
           rm -rf Payload
           mkdir -p Payload
@@ -209,9 +214,37 @@ jobs:
             mv "Payload/$APP_NAME" "Payload/SFI.app"
           fi
 
-          # 移除代码签名相关文件（确保未签名）
+          # 移除代码签名相关文件
           find Payload -name "_CodeSignature" -type d -exec rm -rf {} + 2>/dev/null || true
           find Payload -name "embedded.mobileprovision" -delete 2>/dev/null || true
+
+          # 生成替换变量后的entitlements
+          mkdir -p /tmp/entitlements
+          APP_GROUP="group.com.singbox.lg"
+          BUNDLE_ID="com.singbox.lg"
+
+          # 处理主应用entitlements
+          sed -e "s/\$(APP_GROUP_IDENTIFIER)/$APP_GROUP/g" \
+              -e "s/\$(BASE_PACKAGE_IDENTIFIER)/$BUNDLE_ID/g" \
+              SFI/SFI.entitlements > /tmp/entitlements/SFI.entitlements
+          echo "主应用entitlements:"
+          cat /tmp/entitlements/SFI.entitlements
+
+          # 处理扩展entitlements
+          sed -e "s/\$(APP_GROUP_IDENTIFIER)/$APP_GROUP/g" \
+              -e "s/\$(BASE_PACKAGE_IDENTIFIER)/$BUNDLE_ID/g" \
+              Extension/Extension.entitlements > /tmp/entitlements/Extension.entitlements
+
+          # 使用ldid伪签名嵌入entitlements
+          echo "=== 伪签名主应用 ==="
+          ldid -S/tmp/entitlements/SFI.entitlements Payload/SFI.app/sing-box 2>&1 || echo "主应用签名失败"
+
+          echo "=== 伪签名Network Extension ==="
+          ldid -S/tmp/entitlements/Extension.entitlements Payload/SFI.app/PlugIns/Extension.appex/Extension 2>&1 || echo "扩展签名失败"
+
+          # 验证entitlements是否嵌入
+          echo "=== 验证主应用entitlements ==="
+          ldid -e Payload/SFI.app/sing-box 2>&1 | head -20 || true
 
           # 打包 IPA
           IPA_NAME="SFI-unsigned.ipa"
