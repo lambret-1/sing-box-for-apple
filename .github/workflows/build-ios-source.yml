@@ -118,6 +118,23 @@ jobs:
             -skipPackagePluginValidation 2>&1 | tail -20
           echo "SPM 依赖解析完成"
 
+      - name: 补丁libghostty-spm（替换UIGlassEffect为UIBlurEffect，兼容Xcode 16）
+        run: |
+          GHOSTTY_DIR="build/DerivedData/SourcePackages/checkouts/libghostty-spm"
+          if [ -d "$GHOSTTY_DIR" ]; then
+            echo "开始补丁 libghostty-spm..."
+            # 替换 UIGlassEffect 为 UIBlurEffect，移除不兼容的参数
+            find "$GHOSTTY_DIR" -name "*.swift" -exec sed -i '' \
+              -e 's/UIGlassEffect(\.regular\.interactive(), in: \.rect(cornerRadius: [0-9]*))/UIBlurEffect(style: .regular)/g' \
+              -e 's/UIGlassEffect(\.regular, in: \.rect(cornerRadius: [0-9]*))/UIBlurEffect(style: .regular)/g' \
+              -e 's/UIGlassEffect(\.regular)/UIBlurEffect(style: .regular)/g' \
+              {} +
+            echo "补丁完成"
+            grep -rn "UIGlassEffect" "$GHOSTTY_DIR" --include="*.swift" | head -5 || echo "无残留UIGlassEffect"
+          else
+            echo "未找到 libghostty-spm 目录，跳过补丁"
+          fi
+
       - name: 构建 iOS 应用（未签名）
         run: |
           set -o pipefail
