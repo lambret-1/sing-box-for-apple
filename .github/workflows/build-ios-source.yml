@@ -186,9 +186,9 @@ jobs:
 
       - name: 查找构建产物
         run: |
-          APP_PATH=$(find build/DerivedData -name "*.app" -type d | grep -i "SFI" | head -1)
+          APP_PATH=$(find build/DerivedData -name "*.app" -type d | grep -i "sing-box" | head -1)
           if [ -z "$APP_PATH" ]; then
-            echo "未找到 SFI.app，列出所有 .app:"
+            echo "未找到 sing-box.app，列出所有 .app:"
             find build/DerivedData -name "*.app" -type d | head -10
             exit 1
           fi
