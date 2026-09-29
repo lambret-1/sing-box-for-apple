@@ -56,7 +56,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: Libbox.xcframework
-          key: libbox-testing
+          key: libbox-testing-gvisor
 
       - name: 安装 Go 环境（仅缓存未命中时）
         if: steps.cache-libbox.outputs.cache-hit != 'true'
@@ -81,7 +81,7 @@ jobs:
           git clone --depth 1 --branch testing https://github.com/SagerNet/sing-box.git sing-box-src
           cd sing-box-src
           export PATH=$PATH:$(go env GOPATH)/bin
-          go run ./cmd/internal/build_libbox -target apple
+          go run ./cmd/internal/build_libbox -target apple -tags with_gvisor
           LIBBOX_PATH=$(find . -name "Libbox.xcframework" -type d | head -1)
           if [ -z "$LIBBOX_PATH" ]; then
             echo "编译失败：未找到 Libbox.xcframework"
@@ -96,7 +96,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: Libbox.xcframework
-          key: libbox-testing
+          key: libbox-testing-gvisor
 
       - name: 使用缓存的 Libbox.xcframework
         if: steps.cache-libbox.outputs.cache-hit == 'true'
