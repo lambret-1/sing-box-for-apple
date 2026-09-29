@@ -121,26 +121,31 @@ jobs:
       - name: 补丁libghostty-spm（替换UIGlassEffect为UIBlurEffect，兼容Xcode 16）
         run: |
           echo "=== 补丁步骤开始 ==="
-          # 用 find 查找所有包含 UIGlassEffect 的 Swift 文件
-          TARGET_FILES=$(find build -name "*.swift" -exec grep -l "UIGlassEffect" {} \; 2>/dev/null || true)
-          echo "找到包含 UIGlassEffect 的文件数: $(echo "$TARGET_FILES" | grep -c . || echo 0)"
-          if [ -n "$TARGET_FILES" ]; then
+          echo "当前目录: $(pwd)"
+          echo "查找所有包含 UIGlassEffect 的 Swift 文件（全局）..."
+          TARGET_FILES=$(find . -name "*.swift" -exec grep -l "UIGlassEffect" {} \; 2>/dev/null || true)
+          FILE_COUNT=$(echo "$TARGET_FILES" | grep -c . || echo 0)
+          echo "找到文件数: $FILE_COUNT"
+          if [ "$FILE_COUNT" -gt 0 ]; then
             echo "$TARGET_FILES"
             echo "$TARGET_FILES" | while read -r file; do
-              if [ -n "$file" ]; then
+              if [ -n "$file" ] && [ -f "$file" ]; then
                 echo "补丁: $file"
                 sed -i '' 's/UIGlassEffect/UIBlurEffect/g' "$file"
               fi
             done
             echo "替换完成"
-            REMAINING=$(find build -name "*.swift" -exec grep -l "UIGlassEffect" {} \; 2>/dev/null | wc -l | tr -d ' ')
-            echo "剩余 UIGlassEffect 文件数: $REMAINING"
+            REMAINING=$(find . -name "*.swift" -exec grep -l "UIGlassEffect" {} \; 2>/dev/null | wc -l | tr -d ' ')
+            echo "剩余文件数: $REMAINING"
           else
             echo "未找到包含 UIGlassEffect 的文件"
-            echo "列出 build 目录下的 ghostty 相关文件:"
-            find build -name "*.swift" -path "*ghostty*" 2>/dev/null | head -10 || true
-            echo "列出 build/DerivedData 目录结构:"
-            find build -maxdepth 5 -type d 2>/dev/null | head -20 || true
+            echo "查找 TerminalInputAccessoryView.swift:"
+            find . -name "TerminalInputAccessoryView.swift" 2>/dev/null | head -5 || true
+            echo "查找 libghostty 目录:"
+            find . -type d -name "*ghostty*" 2>/dev/null | head -10 || true
+            echo "列出 DerivedData 位置:"
+            ls -la build/DerivedData/ 2>/dev/null || echo "build/DerivedData 不存在"
+            find ~/Library/Developer/Xcode/DerivedData -name "TerminalInputAccessoryView.swift" 2>/dev/null | head -5 || true
           fi
           echo "=== 补丁步骤结束 ==="
 
