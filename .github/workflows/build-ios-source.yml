@@ -125,6 +125,7 @@ jobs:
             echo "开始补丁 libghostty-spm..."
             # 替换 UIGlassEffect 为 UIBlurEffect，移除不兼容的参数
             find "$GHOSTTY_DIR" -name "*.swift" -exec sed -i '' \
+              -e 's/UIGlassEffect(style: \.regular)/UIBlurEffect(style: .regular)/g' \
               -e 's/UIGlassEffect(\.regular\.interactive(), in: \.rect(cornerRadius: [0-9]*))/UIBlurEffect(style: .regular)/g' \
               -e 's/UIGlassEffect(\.regular, in: \.rect(cornerRadius: [0-9]*))/UIBlurEffect(style: .regular)/g' \
               -e 's/UIGlassEffect(\.regular)/UIBlurEffect(style: .regular)/g' \
