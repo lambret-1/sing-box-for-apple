@@ -214,13 +214,10 @@ jobs:
           find Payload -name "embedded.mobileprovision" -delete 2>/dev/null || true
 
           # 打包 IPA
-          IPA_NAME="SFI-unsigned-v${LIBBOX_VER}.ipa"
+          IPA_NAME="SFI-unsigned.ipa"
           zip -qr "$IPA_NAME" Payload
           ls -lh "$IPA_NAME"
           echo "IPA_NAME=$IPA_NAME" >> $GITHUB_ENV
-
-          # 同时生成一个不带版本号的文件名
-          cp "$IPA_NAME" "SFI-unsigned.ipa"
 
       - name: 上传 IPA 产物
         uses: actions/upload-artifact@v4
