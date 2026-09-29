@@ -115,14 +115,15 @@ jobs:
             -project sing-box.xcodeproj \
             -scheme SFI \
             -destination 'generic/platform=iOS' \
+            -derivedDataPath build/DerivedData \
             -skipPackagePluginValidation 2>&1 | tail -20
           echo "SPM 依赖解析完成"
 
       - name: 补丁libghostty-spm（替换UIGlassEffect为UIBlurEffect，兼容Xcode 16）
         run: |
           echo "=== 补丁步骤开始 ==="
-          # 在 DerivedData 目录下查找包含 UIGlassEffect 的文件
-          DERIVED_DIR="$HOME/Library/Developer/Xcode/DerivedData"
+          # 在 build/DerivedData 目录下查找包含 UIGlassEffect 的文件
+          DERIVED_DIR="build/DerivedData"
           echo "DerivedData 目录: $DERIVED_DIR"
           TARGET_FILES=$(find "$DERIVED_DIR" -name "*.swift" -exec grep -l "UIGlassEffect" {} \; 2>/dev/null || true)
           FILE_COUNT=$(echo "$TARGET_FILES" | grep -c . || echo 0)
@@ -154,6 +155,7 @@ jobs:
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -derivedDataPath build/DerivedData \
+            -disableAutomaticPackageResolution \
             -skipPackagePluginValidation \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
