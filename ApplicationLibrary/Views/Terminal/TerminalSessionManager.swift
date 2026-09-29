@@ -16,6 +16,7 @@
         @Published var activeSessionID: UUID?
         var onDismissAll: (() -> Void)?
 
+        private var pendingSessions: [UUID: Task<Void, Never>] = [:]
         private var phaseCancellables: [UUID: AnyCancellable] = [:]
         private var viewModelCancellables: [UUID: AnyCancellable] = [:]
 
@@ -28,7 +29,7 @@
             return TerminalSessionContentView.displayTitle(
                 phase: active.viewModel.phase,
                 extrasTitle: active.viewModel.extras.title,
-                peerHostName: active.presentedSession.peerHostName
+                peerDisplayName: active.presentedSession.peerDisplayName
             )
         }
 
@@ -36,40 +37,49 @@
             TerminalSessionContentView.displayTitle(
                 phase: session.viewModel.phase,
                 extrasTitle: session.viewModel.extras.title,
-                peerHostName: session.presentedSession.peerHostName
+                peerDisplayName: session.presentedSession.peerDisplayName
             )
         }
 
         func addSession(from presented: TailscaleSSHPresentedSession) {
-            let vm = TerminalWrapperViewModel()
-            let managed = ManagedSession(
-                id: presented.id,
-                presentedSession: presented,
-                viewModel: vm
-            )
-            sessions.append(managed)
-            activeSessionID = presented.id
+            guard pendingSessions[presented.id] == nil,
+                  !sessions.contains(where: { $0.id == presented.id })
+            else { return }
+            pendingSessions[presented.id] = Task { [weak self] in
+                await ImportedFontStore.shared.bootstrap()
+                guard !Task.isCancelled, let self else { return }
+                pendingSessions[presented.id] = nil
+                let vm = TerminalWrapperViewModel()
+                let managed = ManagedSession(
+                    id: presented.id,
+                    presentedSession: presented,
+                    viewModel: vm
+                )
+                sessions.append(managed)
+                activeSessionID = presented.id
 
-            viewModelCancellables[presented.id] = vm.objectWillChange.sink { [weak self] _ in
-                self?.objectWillChange.send()
-            }
-
-            phaseCancellables[presented.id] = vm.$phase
-                .dropFirst()
-                .sink { [weak self] phase in
-                    if case .finished(.cleanExit) = phase {
-                        let sessionID = presented.id
-                        Task { @MainActor [weak self] in
-                            try? await Task.sleep(nanoseconds: NSEC_PER_SEC)
-                            self?.closeSession(id: sessionID)
-                        }
-                    }
+                viewModelCancellables[presented.id] = vm.objectWillChange.sink { [weak self] _ in
+                    self?.objectWillChange.send()
                 }
 
-            Task { await vm.start(presented) }
+                phaseCancellables[presented.id] = vm.$phase
+                    .dropFirst()
+                    .sink { [weak self] phase in
+                        if case .finished(.cleanExit) = phase {
+                            let sessionID = presented.id
+                            Task { @MainActor [weak self] in
+                                try? await Task.sleep(nanoseconds: NSEC_PER_SEC)
+                                self?.closeSession(id: sessionID)
+                            }
+                        }
+                    }
+
+                await vm.start(presented)
+            }
         }
 
         func closeSession(id: UUID) {
+            pendingSessions.removeValue(forKey: id)?.cancel()
             guard let index = sessions.firstIndex(where: { $0.id == id }) else { return }
             let session = sessions[index]
             Task { await session.viewModel.disconnect() }
@@ -81,12 +91,16 @@
                 activeSessionID = sessions.last?.id
             }
 
-            if sessions.isEmpty {
+            if sessions.isEmpty, pendingSessions.isEmpty {
                 onDismissAll?()
             }
         }
 
         func disconnectAll() {
+            for task in pendingSessions.values {
+                task.cancel()
+            }
+            pendingSessions.removeAll()
             for session in sessions {
                 Task { await session.viewModel.disconnect() }
             }
@@ -105,7 +119,7 @@
             let src = active.presentedSession
             let newSession = TailscaleSSHPresentedSession(
                 endpointTag: src.endpointTag,
-                peerHostName: src.peerHostName,
+                peerDisplayName: src.peerDisplayName,
                 peerAddress: src.peerAddress,
                 username: src.username,
                 terminalType: src.terminalType,
