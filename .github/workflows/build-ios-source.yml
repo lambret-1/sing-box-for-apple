@@ -77,8 +77,8 @@ jobs:
         if: steps.cache-libbox.outputs.cache-hit != 'true'
         run: |
           echo "缓存未命中，开始编译 Libbox.xcframework..."
-          # 使用 main 分支最新代码，包含项目所需的 API
-          git clone --depth 1 --branch main https://github.com/SagerNet/sing-box.git sing-box-src
+          # 使用 testing 分支（sing-box默认分支），包含项目所需的最新 API
+          git clone --depth 1 --branch testing https://github.com/SagerNet/sing-box.git sing-box-src
           cd sing-box-src
           export PATH=$PATH:$(go env GOPATH)/bin
           go run ./cmd/internal/build_libbox -target apple
