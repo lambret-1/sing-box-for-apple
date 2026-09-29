@@ -56,7 +56,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: Libbox.xcframework
-          key: libbox-dev-${{ steps.libbox_version.outputs.version }}
+          key: libbox-testing
 
       - name: 安装 Go 环境（仅缓存未命中时）
         if: steps.cache-libbox.outputs.cache-hit != 'true'
@@ -89,7 +89,14 @@ jobs:
           fi
           cp -R "$LIBBOX_PATH" ../
           cd ..
-          echo "Libbox.xcframework 编译完成，已保存到缓存"
+          echo "Libbox.xcframework 编译完成"
+
+      - name: 保存 Libbox 缓存（编译成功后立即保存）
+        if: steps.cache-libbox.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: Libbox.xcframework
+          key: libbox-testing
 
       - name: 使用缓存的 Libbox.xcframework
         if: steps.cache-libbox.outputs.cache-hit == 'true'
