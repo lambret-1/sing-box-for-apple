@@ -11,6 +11,7 @@ import SwiftUI
             @ViewBuilder content: @escaping () -> some View
         ) -> some View {
             if isEnabled {
+                #if swift(>=6.2)
                 if #available(iOS 26.0, *), useSystemAccessory {
                     tabViewBottomAccessory {
                         content()
@@ -20,6 +21,11 @@ import SwiftUI
                         TabViewBottomAccessoryContainer(content: content)
                     }
                 }
+                #else
+                safeAreaInset(edge: .bottom, spacing: 0) {
+                    TabViewBottomAccessoryContainer(content: content)
+                }
+                #endif
             } else {
                 self
             }

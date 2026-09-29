@@ -123,6 +123,7 @@ public extension View {
         #if os(tvOS)
             buttonStyle(ActionButtonStyle())
         #else
+            #if swift(>=6.2)
             if #available(iOS 26.0, macOS 26.0, *) {
                 frame(width: 44, height: 32)
                     .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 8))
@@ -131,6 +132,11 @@ public extension View {
                     .background(Color.secondary.opacity(0.1))
                     .clipShape(RoundedRectangle(cornerRadius: 8))
             }
+            #else
+            frame(width: 44, height: 32)
+                .background(Color.secondary.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            #endif
         #endif
     }
 }
@@ -192,6 +198,7 @@ private struct CardStyleModifier: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
 
     func body(content: Content) -> some View {
+        #if swift(>=6.2)
         if #available(iOS 26.0, macOS 26.0, tvOS 26.0, *) {
             content
                 .glassEffect(.regular, in: .rect(cornerRadius: 16))
@@ -200,6 +207,11 @@ private struct CardStyleModifier: ViewModifier {
                 .background(backgroundColor)
                 .cornerRadius(16)
         }
+        #else
+        content
+            .background(backgroundColor)
+            .cornerRadius(16)
+        #endif
     }
 
     private var backgroundColor: Color {
