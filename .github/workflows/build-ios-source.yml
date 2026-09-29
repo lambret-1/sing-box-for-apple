@@ -133,12 +133,19 @@ jobs:
             echo "$TARGET_FILES" | while read -r file; do
               if [ -n "$file" ] && [ -f "$file" ]; then
                 echo "补丁: $file"
+                # 替换 UIGlassEffect 为 UIBlurEffect
                 sed -i '' 's/UIGlassEffect/UIBlurEffect/g' "$file"
+                # 删除 effect.isInteractive = true 这一行（UIBlurEffect 无此属性）
+                sed -i '' '/effect.isInteractive/d' "$file"
+                # 删除 .isInteractive 相关代码
+                sed -i '' 's/\.isInteractive = true//g' "$file"
               fi
             done
             echo "替换完成"
             REMAINING=$(find "$DERIVED_DIR" -name "*.swift" -exec grep -l "UIGlassEffect" {} \; 2>/dev/null | wc -l | tr -d ' ')
-            echo "剩余文件数: $REMAINING"
+            echo "剩余 UIGlassEffect 文件数: $REMAINING"
+            REMAINING_INTERACTIVE=$(find "$DERIVED_DIR" -name "*.swift" -exec grep -l "isInteractive" {} \; 2>/dev/null | wc -l | tr -d ' ')
+            echo "剩余 isInteractive 文件数: $REMAINING_INTERACTIVE"
           else
             echo "未找到包含 UIGlassEffect 的文件"
             echo "查找 TerminalInputAccessoryView.swift:"
