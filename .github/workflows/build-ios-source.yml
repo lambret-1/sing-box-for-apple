@@ -14,6 +14,203 @@ env:
   # 使用运行器默认 Xcode 版本，避免指定版本不存在
   DEVELOPER_DIR: ""
 
+jobs: 
+  build-ios:
+    runs-on: macos-15
+    timeout-minutes: 60
+
+    steps:
+      - name: 检出代码（含子模块）
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: 配置 Xcode 版本
+        run: |
+          # 显示当前 Xcode 版本
+          xcodebuild -version
+          echo "Xcode 路径: $(xcode-select -p)"
+
+      - name: 确定 Libbox 版本
+        id: libbox_version
+        run: |
+          DEFAULT_LIBBOX_VER="1.14.2"
+          if [ -n "${{ github.event.inputs.libbox_version }}" ]; then
+            LIBBOX_VER="${{ github.event.inputs.libbox_version }}"
+            echo "使用手动指定版本: $LIBBOX_VER"
+          else
+            LIBBOX_VER=$(curl -sL --max-time 10 "https://api.github.com/repos/SagerNet/sing-box/releases/latest" | grep '"tag_name"' | sed -E 's/.*"v?([^"]+)".*/\1/' | head -1)
+            if [ -z "$LIBBOX_VER" ]; then
+              echo "获取最新版本失败，使用默认版本: $DEFAULT_LIBBOX_VER"
+              LIBBOX_VER="$DEFAULT_LIBBOX_VER"
+            else
+              echo "获取到最新版本: $LIBBOX_VER"
+            fi
+          fi
+          echo "LIBBOX_VER=$LIBBOX_VER" >> $GITHUB_ENV
+          echo "version=$LIBBOX_VER" >> $GITHUB_OUTPUT
+
+      - name: 缓存 Libbox.xcframework
+        id: cache-libbox
+        uses: actions/cache@v4
+        with:
+          path: Libbox.xcframework
+          key: libbox-dev-${{ steps.libbox_version.outputs.version }}
+
+      - name: 安装 Go 环境（仅缓存未命中时）
+        if: steps.cache-libbox.outputs.cache-hit != 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: 安装 gomobile 工具（仅缓存未命中时）
+        if: steps.cache-libbox.outputs.cache-hit != 'true'
+        run: |
+          echo "安装 gomobile..."
+          go install github.com/sagernet/gomobile/cmd/gomobile@latest
+          export PATH=$PATH:$(go env GOPATH)/bin
+          gomobile init
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+
+      - name: 从源码编译 Libbox.xcframework（仅缓存未命中时）
+        if: steps.cache-libbox.outputs.cache-hit != 'true'
+        run: |
+          echo "缓存未命中，开始编译 Libbox.xcframework..."
+          # 使用 dev 分支，包含项目所需的最新 API
+          git clone --depth 1 --branch dev https://github.com/SagerNet/sing-box.git sing-box-src
+          cd sing-box-src
+          export PATH=$PATH:$(go env GOPATH)/bin
+          go run ./cmd/internal/build_libbox -target apple
+          LIBBOX_PATH=$(find . -name "Libbox.xcframework" -type d | head -1)
+          if [ -z "$LIBBOX_PATH" ]; then
+            echo "编译失败：未找到 Libbox.xcframework"
+            exit 1
+          fi
+          cp -R "$LIBBOX_PATH" ../
+          cd ..
+          echo "Libbox.xcframework 编译完成，已保存到缓存"
+
+      - name: 使用缓存的 Libbox.xcframework
+        if: steps.cache-libbox.outputs.cache-hit == 'true'
+        run: |
+          echo "使用缓存的 Libbox.xcframework（版本: ${LIBBOX_VER}）"
+          ls -la Libbox.xcframework/
+
+      - name: 安装构建工具
+        run: |
+          brew install xcbeautify || echo "xcbeautify 安装失败，将使用原始日志"
+          which xcbeautify || true
+
+      - name: 解析 Swift Package 依赖
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project sing-box.xcodeproj \
+            -scheme SFI \
+            -destination 'generic/platform=iOS' \
+            -skipPackagePluginValidation 2>&1 | tail -20
+          echo "SPM 依赖解析完成"
+
+      - name: 构建 iOS 应用（未签名）
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project sing-box.xcodeproj \
+            -scheme SFI \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/DerivedData \
+            -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            EXPANDED_CODE_SIGN_IDENTITY="" \
+            EXPANDED_CODE_SIGN_IDENTITY_NAME="" \
+            2>&1 | tee build.log | {
+              if command -v xcbeautify &> /dev/null; then
+                xcbeautify --quiet
+              else
+                tail -100
+              fi
+            }
+          BUILD_EXIT=${PIPESTATUS[0]}
+          if [ $BUILD_EXIT -ne 0 ]; then
+            echo "构建失败，显示错误日志:"
+            grep -i "error:" build.log | head -30
+            exit $BUILD_EXIT
+          fi
+          echo "构建成功"
+
+      - name: 查找构建产物
+        run: |
+          APP_PATH=$(find build/DerivedData -name "*.app" -type d | grep -i "SFI" | head -1)
+          if [ -z "$APP_PATH" ]; then
+            echo "未找到 SFI.app，列出所有 .app:"
+            find build/DerivedData -name "*.app" -type d | head -10
+            exit 1
+          fi
+          echo "找到应用: $APP_PATH"
+          ls -la "$APP_PATH/"
+          echo "APP_PATH=$APP_PATH" >> $GITHUB_ENV
+
+      - name: 打包未签名 IPA
+        run: |
+          rm -rf Payload
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          APP_NAME=$(basename "$APP_PATH")
+          echo "应用名称: $APP_NAME"
+
+          # 重命名为 SFI.app（如果不是）
+          if [ "$APP_NAME" != "SFI.app" ]; then
+            mv "Payload/$APP_NAME" "Payload/SFI.app"
+          fi
+
+          # 移除代码签名相关文件（确保未签名）
+          find Payload -name "_CodeSignature" -type d -exec rm -rf {} + 2>/dev/null || true
+          find Payload -name "embedded.mobileprovision" -delete 2>/dev/null || true
+
+          # 打包 IPA
+          IPA_NAME="SFI-unsigned-v${LIBBOX_VER}.ipa"
+          zip -qr "$IPA_NAME" Payload
+          ls -lh "$IPA_NAME"
+          echo "IPA_NAME=$IPA_NAME" >> $GITHUB_ENV
+
+          # 同时生成一个不带版本号的文件名
+          cp "$IPA_NAME" "SFI-unsigned.ipa"
+
+      - name: 上传 IPA 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: SFI-unsigned-ipa
+          path: |
+            SFI-unsigned.ipa
+            SFI-unsigned-v*.ipa
+          retention-days: 30
+
+      - name: 上传构建日志（失败时）
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          retention-days: 7
+name: 从源码构建SFI iOS IPA
+
+on:
+  push:
+    branches: [ dev, main ]
+  workflow_dispatch:
+    inputs:
+      libbox_version:
+        description: 'Libbox 版本（如 1.14.1，留空使用最新）'
+        required: false
+        default: ''
+
+env:
+  # 使用运行器默认 Xcode 版本，避免指定版本不存在
+  DEVELOPER_DIR: ""
+
 jobs:
   build-ios:
     runs-on: macos-15
