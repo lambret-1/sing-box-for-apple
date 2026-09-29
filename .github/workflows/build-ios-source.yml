@@ -121,9 +121,10 @@ jobs:
       - name: 补丁libghostty-spm（替换UIGlassEffect为UIBlurEffect，兼容Xcode 16）
         run: |
           echo "=== 补丁步骤开始 ==="
-          echo "当前目录: $(pwd)"
-          echo "查找所有包含 UIGlassEffect 的 Swift 文件（全局）..."
-          TARGET_FILES=$(find . -name "*.swift" -exec grep -l "UIGlassEffect" {} \; 2>/dev/null || true)
+          # 在 DerivedData 目录下查找包含 UIGlassEffect 的文件
+          DERIVED_DIR="$HOME/Library/Developer/Xcode/DerivedData"
+          echo "DerivedData 目录: $DERIVED_DIR"
+          TARGET_FILES=$(find "$DERIVED_DIR" -name "*.swift" -exec grep -l "UIGlassEffect" {} \; 2>/dev/null || true)
           FILE_COUNT=$(echo "$TARGET_FILES" | grep -c . || echo 0)
           echo "找到文件数: $FILE_COUNT"
           if [ "$FILE_COUNT" -gt 0 ]; then
@@ -135,17 +136,12 @@ jobs:
               fi
             done
             echo "替换完成"
-            REMAINING=$(find . -name "*.swift" -exec grep -l "UIGlassEffect" {} \; 2>/dev/null | wc -l | tr -d ' ')
+            REMAINING=$(find "$DERIVED_DIR" -name "*.swift" -exec grep -l "UIGlassEffect" {} \; 2>/dev/null | wc -l | tr -d ' ')
             echo "剩余文件数: $REMAINING"
           else
             echo "未找到包含 UIGlassEffect 的文件"
             echo "查找 TerminalInputAccessoryView.swift:"
-            find . -name "TerminalInputAccessoryView.swift" 2>/dev/null | head -5 || true
-            echo "查找 libghostty 目录:"
-            find . -type d -name "*ghostty*" 2>/dev/null | head -10 || true
-            echo "列出 DerivedData 位置:"
-            ls -la build/DerivedData/ 2>/dev/null || echo "build/DerivedData 不存在"
-            find ~/Library/Developer/Xcode/DerivedData -name "TerminalInputAccessoryView.swift" 2>/dev/null | head -5 || true
+            find "$DERIVED_DIR" -name "TerminalInputAccessoryView.swift" 2>/dev/null | head -5 || true
           fi
           echo "=== 补丁步骤结束 ==="
 
