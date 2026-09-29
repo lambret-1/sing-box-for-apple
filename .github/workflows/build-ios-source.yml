@@ -121,19 +121,20 @@ jobs:
       - name: 补丁libghostty-spm（替换UIGlassEffect为UIBlurEffect，兼容Xcode 16）
         run: |
           GHOSTTY_DIR="build/DerivedData/SourcePackages/checkouts/libghostty-spm"
+          echo "工作目录: $(pwd)"
+          echo "查找 libghostty-spm 目录..."
+          find . -name "TerminalInputAccessoryView.swift" -path "*libghostty*" 2>/dev/null | head -5
           if [ -d "$GHOSTTY_DIR" ]; then
-            echo "开始补丁 libghostty-spm..."
-            # 替换 UIGlassEffect 为 UIBlurEffect，移除不兼容的参数
-            find "$GHOSTTY_DIR" -name "*.swift" -exec sed -i '' \
-              -e 's/UIGlassEffect(style: \.regular)/UIBlurEffect(style: .regular)/g' \
-              -e 's/UIGlassEffect(\.regular\.interactive(), in: \.rect(cornerRadius: [0-9]*))/UIBlurEffect(style: .regular)/g' \
-              -e 's/UIGlassEffect(\.regular, in: \.rect(cornerRadius: [0-9]*))/UIBlurEffect(style: .regular)/g' \
-              -e 's/UIGlassEffect(\.regular)/UIBlurEffect(style: .regular)/g' \
-              {} +
-            echo "补丁完成"
+            echo "找到目录，开始补丁..."
+            find "$GHOSTTY_DIR" -name "*.swift" -print0 | while IFS= read -r -d '' file; do
+              perl -pi -e 's/UIGlassEffect\(style: \.regular\)/UIBlurEffect(style: .regular)/g' "$file"
+            done
+            echo "补丁完成，检查残留:"
             grep -rn "UIGlassEffect" "$GHOSTTY_DIR" --include="*.swift" | head -5 || echo "无残留UIGlassEffect"
           else
-            echo "未找到 libghostty-spm 目录，跳过补丁"
+            echo "未找到目录: $GHOSTTY_DIR"
+            echo "列出 build 目录:"
+            ls -la build/ 2>/dev/null || echo "build目录不存在"
           fi
 
       - name: 构建 iOS 应用（未签名）
