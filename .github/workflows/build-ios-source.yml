@@ -81,7 +81,8 @@ jobs:
           git clone --depth 1 --branch testing https://github.com/SagerNet/sing-box.git sing-box-src
           cd sing-box-src
           export PATH=$PATH:$(go env GOPATH)/bin
-          go run ./cmd/internal/build_libbox -target apple -tags with_gvisor
+          export GOFLAGS="-tags=with_gvisor"
+          go run ./cmd/internal/build_libbox -target apple
           LIBBOX_PATH=$(find . -name "Libbox.xcframework" -type d | head -1)
           if [ -z "$LIBBOX_PATH" ]; then
             echo "编译失败：未找到 Libbox.xcframework"
