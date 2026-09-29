@@ -121,18 +121,25 @@ jobs:
       - name: 补丁libghostty-spm（替换UIGlassEffect为UIBlurEffect，兼容Xcode 16）
         run: |
           echo "=== 补丁步骤开始 ==="
-          CHECKOUTS_DIR="build/DerivedData/SourcePackages/checkouts"
-          echo "SPM checkouts 目录: $CHECKOUTS_DIR"
-          ls -la "$CHECKOUTS_DIR" 2>/dev/null | head -10
-          GHOSTTY_DIR="$CHECKOUTS_DIR/libghostty-spm"
-          if [ -d "$GHOSTTY_DIR" ]; then
-            echo "找到 libghostty-spm 目录"
-            echo "替换前 UIGlassEffect 数量: $(grep -r 'UIGlassEffect' "$GHOSTTY_DIR" --include='*.swift' | wc -l)"
+          # 查找 libghostty-spm 目录的实际位置
+          GHOSTTY_DIR=$(find build -type d -name "libghostty-spm" 2>/dev/null | head -1)
+          echo "找到 libghostty-spm: $GHOSTTY_DIR"
+          if [ -z "$GHOSTTY_DIR" ]; then
+            echo "在 build 目录未找到，尝试全局查找..."
+            GHOSTTY_DIR=$(find . -type d -name "libghostty-spm" 2>/dev/null | head -1)
+            echo "全局查找结果: $GHOSTTY_DIR"
+          fi
+          if [ -n "$GHOSTTY_DIR" ] && [ -d "$GHOSTTY_DIR" ]; then
+            echo "开始补丁..."
+            BEFORE=$(grep -r 'UIGlassEffect' "$GHOSTTY_DIR" --include='*.swift' 2>/dev/null | wc -l | tr -d ' ')
+            echo "替换前 UIGlassEffect 数量: $BEFORE"
             find "$GHOSTTY_DIR" -name "*.swift" -exec sed -i '' 's/UIGlassEffect/UIBlurEffect/g' {} +
-            echo "替换后 UIGlassEffect 数量: $(grep -r 'UIGlassEffect' "$GHOSTTY_DIR" --include='*.swift' | wc -l)"
+            AFTER=$(grep -r 'UIGlassEffect' "$GHOSTTY_DIR" --include='*.swift' 2>/dev/null | wc -l | tr -d ' ')
+            echo "替换后 UIGlassEffect 数量: $AFTER"
           else
-            echo "未找到 libghostty-spm 目录，列出 checkouts:"
-            ls -la "$CHECKOUTS_DIR" 2>/dev/null
+            echo "警告: 未找到 libghostty-spm 目录，跳过补丁"
+            echo "列出 build 目录结构:"
+            find build -maxdepth 4 -type d 2>/dev/null | head -20 || true
           fi
           echo "=== 补丁步骤结束 ==="
 
