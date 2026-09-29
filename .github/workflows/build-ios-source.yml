@@ -121,25 +121,21 @@ jobs:
       - name: 补丁libghostty-spm（替换UIGlassEffect为UIBlurEffect，兼容Xcode 16）
         run: |
           echo "=== 补丁步骤开始 ==="
-          # 查找 libghostty-spm 目录的实际位置
-          GHOSTTY_DIR=$(find build -type d -name "libghostty-spm" 2>/dev/null | head -1)
-          echo "找到 libghostty-spm: $GHOSTTY_DIR"
-          if [ -z "$GHOSTTY_DIR" ]; then
-            echo "在 build 目录未找到，尝试全局查找..."
-            GHOSTTY_DIR=$(find . -type d -name "libghostty-spm" 2>/dev/null | head -1)
-            echo "全局查找结果: $GHOSTTY_DIR"
-          fi
-          if [ -n "$GHOSTTY_DIR" ] && [ -d "$GHOSTTY_DIR" ]; then
-            echo "开始补丁..."
-            BEFORE=$(grep -r 'UIGlassEffect' "$GHOSTTY_DIR" --include='*.swift' 2>/dev/null | wc -l | tr -d ' ')
-            echo "替换前 UIGlassEffect 数量: $BEFORE"
-            find "$GHOSTTY_DIR" -name "*.swift" -exec sed -i '' 's/UIGlassEffect/UIBlurEffect/g' {} +
-            AFTER=$(grep -r 'UIGlassEffect' "$GHOSTTY_DIR" --include='*.swift' 2>/dev/null | wc -l | tr -d ' ')
-            echo "替换后 UIGlassEffect 数量: $AFTER"
+          # 直接查找包含 UIGlassEffect 的 Swift 文件
+          TARGET_FILES=$(grep -rl 'UIGlassEffect' build --include='*.swift' 2>/dev/null || true)
+          echo "找到包含 UIGlassEffect 的文件数: $(echo "$TARGET_FILES" | grep -c . || echo 0)"
+          if [ -n "$TARGET_FILES" ]; then
+            echo "$TARGET_FILES"
+            echo "$TARGET_FILES" | while read -r file; do
+              [ -n "$file" ] && sed -i '' 's/UIGlassEffect/UIBlurEffect/g' "$file"
+            done
+            echo "替换完成"
+            REMAINING=$(grep -rl 'UIGlassEffect' build --include='*.swift' 2>/dev/null | wc -l | tr -d ' ')
+            echo "剩余 UIGlassEffect 文件数: $REMAINING"
           else
-            echo "警告: 未找到 libghostty-spm 目录，跳过补丁"
-            echo "列出 build 目录结构:"
-            find build -maxdepth 4 -type d 2>/dev/null | head -20 || true
+            echo "未找到包含 UIGlassEffect 的文件"
+            echo "列出 build 目录下的 swift 文件:"
+            find build -name "*.swift" -path "*ghostty*" 2>/dev/null | head -10 || true
           fi
           echo "=== 补丁步骤结束 ==="
 
