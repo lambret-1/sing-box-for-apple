@@ -110,27 +110,17 @@ struct MainView: View {
             page.contentView
                 .navigationTitle(page.title)
                 .toolbar {
-                    toolbarContent(remoteControlInToolbar: remoteControlInToolbar)
+                    ToolbarItem(placement: .topBarLeading) {
+                        HStack(spacing: 0) {
+                            if remoteControlInToolbar, environments.remoteServer != nil || !remoteServers.isEmpty {
+                                remoteControlPicker
+                            }
+                            serviceToolbarItem
+                        }
+                    }
                 }
         }
         .environment(\.remoteControlInToolbar, remoteControlInToolbar)
-    }
-
-    @ToolbarContentBuilder
-    private func toolbarContent(remoteControlInToolbar: Bool) -> some ToolbarContent {
-        if remoteControlInToolbar, environments.remoteServer != nil || !remoteServers.isEmpty {
-            ToolbarItem(placement: .topBarLeading) {
-                remoteControlPicker
-            }
-            #if swift(>=6.2)
-            if #available(iOS 26.0, *) {
-                ToolbarSpacer(.fixed, placement: .topBarLeading)
-            }
-            #endif
-        }
-        ToolbarItem(placement: .topBarLeading) {
-            serviceToolbarItem
-        }
     }
 
     private var remoteControlPicker: some View {
