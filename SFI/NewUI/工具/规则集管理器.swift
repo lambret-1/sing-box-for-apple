@@ -7,6 +7,7 @@
 
 import Foundation
 import Combine
+import ApplicationLibrary
 
 // MARK: - 下载状态枚举
 
