@@ -40,7 +40,7 @@ public struct ProfilePickerSheet: View {
         _selectedProfileID = selectedProfileID
     }
 
-    var body: some View {
+    public var body: some View {
         #if os(iOS)
             if #available(iOS 26, *) {
                 iOSBody
