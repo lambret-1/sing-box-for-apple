@@ -2,60 +2,74 @@
 //  页面/功能页面/抓包列表页面.swift
 //  sing-box-for-apple 新UI
 //
-//  骨架阶段 - 数据待对接
-//  HTTP 抓包记录列表页面骨架：统计栏、方法筛选胶囊、抓包记录列表、空状态提示
+//  HTTP 抓包记录列表页面：统计栏、方法筛选、搜索、抓包记录、HAR导出
 //
 
 import SwiftUI
 
-// MARK: - 页面主体
+// MARK: - 抓包列表页面
 
-/// HTTP 抓包列表页面骨架
-///
-/// 通过 NavigationLink 从配置管理弹窗 push 进入，导航栈由外层弹窗容器提供。
+/// HTTP 抓包列表页面
 struct 抓包列表页面: View {
-    /// 当前选中的方法筛选胶囊（"全部" 表示不过滤）
+    @ObservedObject var mitm = MITM状态.共享
+
+    /// 当前选中的方法筛选
     @State private var 选中筛选: String = "全部"
-    /// 提示文案（占位按钮点击后弹出）
-    @State private var 提示: String?
+    /// 搜索文本
+    @State private var 搜索文本 = ""
+    /// 是否显示详情
+    @State private var 选中记录: 抓包记录?
+    /// 是否显示分享
+    @State private var 显示分享 = false
+    /// HAR 导出文本
+    @State private var HAR文本: String?
 
-    // TODO: 第六阶段对接官方抓包数据
-    /// 方法筛选胶囊选项
-    private let 筛选选项: [String] = ["全部", "GET", "POST", "PUT", "DELETE"]
+    /// 筛选选项
+    private let 筛选选项 = ["全部", "GET", "POST", "PUT", "DELETE", "PATCH"]
 
-    // TODO: 第六阶段对接官方抓包数据
-    /// 抓包记录列表（静态占位，8 条）
-    private let 抓包记录列表: [抓包记录占位] = [
-        抓包记录占位(方法: "GET",    URL: "https://api.example.com/v1/users",        状态码: 200, 耗时: "45ms", 大小: "1.2 KB", 时间: "10:23:11"),
-        抓包记录占位(方法: "POST",   URL: "https://api.example.com/v1/login",        状态码: 200, 耗时: "128ms", 大小: "860 B",  时间: "10:23:09"),
-        抓包记录占位(方法: "GET",    URL: "https://cdn.example.com/assets/logo.png", 状态码: 200, 耗时: "22ms",  大小: "58 KB",  时间: "10:23:05"),
-        抓包记录占位(方法: "PUT",    URL: "https://api.example.com/v1/users/42",     状态码: 204, 耗时: "67ms",  大小: "0 B",    时间: "10:22:58"),
-        抓包记录占位(方法: "GET",    URL: "https://api.example.com/v1/feed",         状态码: 304, 耗时: "19ms",  大小: "0 B",    时间: "10:22:51"),
-        抓包记录占位(方法: "DELETE", URL: "https://api.example.com/v1/cache",         状态码: 403, 耗时: "88ms",  大小: "312 B",  时间: "10:22:44"),
-        抓包记录占位(方法: "POST",   URL: "https://upload.example.com/file",          状态码: 500, 耗时: "1.2s",  大小: "2.4 KB",  时间: "10:22:30"),
-        抓包记录占位(方法: "GET",    URL: "https://static.example.com/index.css",   状态码: 200, 耗时: "14ms",  大小: "9.6 KB",  时间: "10:22:18")
-    ]
+    /// 过滤后的记录
+    private var 过滤后记录: [抓包记录] {
+        var 结果 = mitm.抓包记录列表
 
-    /// 根据筛选条件过滤后的记录
-    private var 过滤后记录: [抓包记录占位] {
-        if 选中筛选 == "全部" { return 抓包记录列表 }
-        return 抓包记录列表.filter { $0.方法 == 选中筛选 }
+        // 方法筛选
+        if 选中筛选 != "全部" {
+            结果 = 结果.filter { $0.方法 == 选中筛选 }
+        }
+
+        // 搜索
+        if !搜索文本.isEmpty {
+            结果 = 结果.filter {
+                $0.URL.localizedCaseInsensitiveContains(搜索文本) ||
+                $0.域名.localizedCaseInsensitiveContains(搜索文本)
+            }
+        }
+
+        return 结果
     }
 
     var body: some View {
         List {
-            // MARK: 顶部统计栏
+            // MARK: 统计栏
             Section {
                 HStack(spacing: 间距常量.标准) {
-                    统计指标(标题: "请求总数", 数值: "1,024", 颜色: .主题色)
-                    统计指标(标题: "成功", 数值: "986", 颜色: .成功色)
-                    统计指标(标题: "失败", 数值: "38", 颜色: .危险色)
-                    统计指标(标题: "流量", 数值: "12.4 MB", 颜色: .警告色)
+                    统计指标(标题: "总数", 数值: "\(mitm.抓包记录列表.count)", 颜色: .主题色)
+                    统计指标(标题: "成功", 数值: "\(mitm.抓包记录列表.filter { $0.状态码 < 400 }.count)", 颜色: .成功色)
+                    统计指标(标题: "失败", 数值: "\(mitm.抓包记录列表.filter { $0.状态码 >= 400 }.count)", 颜色: .危险色)
+                    统计指标(标题: "已修改", 数值: "\(mitm.抓包记录列表.filter { $0.已修改 }.count)", 颜色: .警告色)
                 }
                 .padding(.vertical, 间距常量.紧凑)
             }
 
-            // MARK: 方法筛选胶囊
+            // MARK: 搜索栏
+            Section {
+                HStack(spacing: 间距常量.紧凑) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.次要文字)
+                    TextField("搜索 URL 或域名", text: $搜索文本)
+                }
+            }
+
+            // MARK: 方法筛选
             Section {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 间距常量.紧凑) {
@@ -69,17 +83,24 @@ struct 抓包列表页面: View {
                 }
             }
 
-            // MARK: 抓包记录列表
+            // MARK: 记录列表
             Section("抓包记录") {
                 if 过滤后记录.isEmpty {
                     EmptyStateView(
                         图标: "tray",
-                        标题: "暂无抓包记录",
-                        说明: "启动隧道后即可捕获 HTTP 流量"
+                        标题: mitm.抓包记录列表.isEmpty ? "暂无抓包记录" : "无匹配记录",
+                        说明: mitm.抓包记录列表.isEmpty ? "启动隧道并开启 MITM 后即可捕获 HTTP 流量" : "尝试调整筛选条件"
                     )
                 } else {
                     ForEach(过滤后记录) { 记录 in
                         抓包记录行(记录: 记录)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                选中记录 = 记录
+                            }
+                    }
+                    .onDelete { 索引集 in
+                        mitm.抓包记录列表.remove(atOffsets: 索引集)
                     }
                 }
             }
@@ -89,34 +110,48 @@ struct 抓包列表页面: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    提示 = "后续阶段支持"
+                Menu {
+                    Button {
+                        导出HAR()
+                    } label: {
+                        Label("导出 HAR", systemImage: "square.and.arrow.up")
+                    }
+
+                    Button(role: .destructive) {
+                        mitm.清空抓包记录()
+                    } label: {
+                        Label("清空记录", systemImage: "trash")
+                    }
                 } label: {
-                    Image(systemName: "trash")
+                    Image(systemName: "ellipsis.circle")
                 }
-                .accessibilityLabel("清空记录")
             }
         }
-        .alert("提示", isPresented: Binding(
-            get: { 提示 != nil },
-            set: { if !$0 { 提示 = nil } }
-        )) {
-            Button("好", role: .cancel) { 提示 = nil }
-        } message: {
-            Text(提示 ?? "")
+        .sheet(item: $选中记录) { 记录 in
+            抓包详情页面(记录: 记录)
         }
+        .sheet(isPresented: $显示分享) {
+            if let har = HAR文本, let data = har.data(using: .utf8) {
+                ShareSheet(items: [data])
+            }
+        }
+    }
+
+    // MARK: - 方法
+
+    /// 导出 HAR
+    private func 导出HAR() {
+        HAR文本 = mitm.导出HAR()
+        显示分享 = true
     }
 }
 
 // MARK: - 子视图
 
-/// 统计指标：标题 + 数值
+/// 统计指标
 private struct 统计指标: View {
-    /// 指标标题
     let 标题: String
-    /// 指标数值
     let 数值: String
-    /// 数值颜色
     let 颜色: Color
 
     var body: some View {
@@ -134,11 +169,8 @@ private struct 统计指标: View {
 
 /// 筛选胶囊按钮
 private struct 胶囊按钮: View {
-    /// 按钮文字
     let 文字: String
-    /// 是否选中
     let 选中: Bool
-    /// 点击回调
     let 动作: () -> Void
 
     var body: some View {
@@ -158,8 +190,7 @@ private struct 胶囊按钮: View {
 
 /// 单条抓包记录行
 private struct 抓包记录行: View {
-    /// 记录数据
-    let 记录: 抓包记录占位
+    let 记录: 抓包记录
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -176,14 +207,21 @@ private struct 抓包记录行: View {
             }
 
             HStack(spacing: 间距常量.中等) {
-                Text(记录.时间)
+                Text(记录.时间, style: .time)
                     .font(字体层级.辅助说明)
                     .foregroundColor(.次要文字)
                 Spacer()
-                Text(记录.耗时)
+                if 记录.已修改, let 脚本名 = 记录.匹配脚本 {
+                    Image(systemName: "pencil.circle.fill")
+                        .foregroundColor(.警告色)
+                    Text(脚本名)
+                        .font(字体层级.辅助说明)
+                        .foregroundColor(.警告色)
+                }
+                Text(记录.格式化耗时)
                     .font(字体层级.辅助说明)
                     .foregroundColor(.次要文字)
-                Text(记录.大小)
+                Text(记录.格式化响应大小)
                     .font(字体层级.辅助说明)
                     .foregroundColor(.次要文字)
             }
@@ -191,7 +229,6 @@ private struct 抓包记录行: View {
         .padding(.vertical, 间距常量.紧凑 / 2)
     }
 
-    /// 根据状态码返回颜色
     private func 状态码颜色(_ 码: Int) -> Color {
         switch 码 {
         case 200..<300: return .成功色
@@ -201,18 +238,17 @@ private struct 抓包记录行: View {
     }
 }
 
-/// HTTP 方法徽章：GET=绿、POST=蓝、PUT=橙、DELETE=红
+/// HTTP 方法徽章
 private struct 方法徽章: View {
-    /// HTTP 方法
     let 方法: String
 
-    /// 方法对应颜色
     private var 颜色: Color {
         switch 方法 {
         case "GET":     return .成功色
         case "POST":    return .主题色
         case "PUT":     return .警告色
         case "DELETE":  return .危险色
+        case "PATCH":   return .绿色文字
         default:        return .次要文字
         }
     }
@@ -229,24 +265,125 @@ private struct 方法徽章: View {
     }
 }
 
-// MARK: - 静态占位数据模型
+// MARK: - 抓包详情页面
 
-/// 抓包记录占位模型
-private struct 抓包记录占位: Identifiable {
-    /// 唯一标识
-    let id = UUID()
-    /// HTTP 方法
-    let 方法: String
-    /// 请求 URL
-    let URL: String
-    /// 状态码
-    let 状态码: Int
-    /// 耗时
-    let 耗时: String
-    /// 响应大小
-    let 大小: String
-    /// 请求时间
-    let 时间: String
+/// 抓包详情页面
+struct 抓包详情页面: View {
+    let 记录: 抓包记录
+    @Environment(\.dismiss) private var 关闭
+
+    var body: some View {
+        NavigationStack {
+            List {
+                // MARK: 请求概览
+                Section("请求概览") {
+                    详情行(标签: "方法", 值: 记录.方法)
+                    详情行(标签: "URL", 值: 记录.URL)
+                    详情行(标签: "域名", 值: 记录.域名)
+                    详情行(标签: "时间", 值: 记录.时间.formatted())
+                    详情行(标签: "耗时", 值: 记录.格式化耗时)
+                    详情行(标签: "大小", 值: "请求 \(抓包记录.格式化字节数(记录.请求大小)) / 响应 \(记录.格式化响应大小)")
+                }
+
+                // MARK: 响应状态
+                Section("响应") {
+                    HStack {
+                        Text("状态码")
+                            .font(字体层级.正文)
+                            .foregroundColor(.次要文字)
+                        Spacer()
+                        Text("\(记录.状态码)")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(状态码颜色(记录.状态码))
+                    }
+                }
+
+                // MARK: 请求头
+                Section("请求头") {
+                    ForEach(Array(记录.请求头.keys.sorted()), id: \.self) { 键 in
+                        详情行(标签: 键, 值: 记录.请求头[键] ?? "")
+                    }
+                }
+
+                // MARK: 响应头
+                Section("响应头") {
+                    ForEach(Array(记录.响应头.keys.sorted()), id: \.self) { 键 in
+                        详情行(标签: 键, 值: 记录.响应头[键] ?? "")
+                    }
+                }
+
+                // MARK: 请求体
+                if !记录.请求体.isEmpty {
+                    Section("请求体") {
+                        Text(记录.请求体)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundColor(.次要文字)
+                            .textSelection(.enabled)
+                    }
+                }
+
+                // MARK: 响应体
+                if !记录.响应体.isEmpty {
+                    Section("响应体") {
+                        Text(记录.响应体)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundColor(.次要文字)
+                            .textSelection(.enabled)
+                    }
+                }
+
+                // MARK: 脚本修改信息
+                if 记录.已修改 {
+                    Section("脚本修改") {
+                        if let 脚本名 = 记录.匹配脚本 {
+                            详情行(标签: "匹配脚本", 值: 脚本名)
+                        }
+                        StateBadge(文字: "此请求已被脚本修改", 类型: .警告, 带圆点: true)
+                    }
+                }
+            }
+            .listStyle(.insetGrouped)
+            .navigationTitle("抓包详情")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("完成") { 关闭() }
+                }
+            }
+        }
+    }
+
+    private func 详情行(标签: String, 值: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(标签)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.次要文字)
+            Text(值)
+                .font(.system(.caption, design: .monospaced))
+                .foregroundColor(.primary)
+        }
+    }
+
+    private func 状态码颜色(_ 码: Int) -> Color {
+        switch 码 {
+        case 200..<300: return .成功色
+        case 300..<400: return .警告色
+        default:        return .危险色
+        }
+    }
+}
+
+// MARK: - 分享 Sheet
+
+/// 系统分享 Sheet
+struct ShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 // MARK: - 预览

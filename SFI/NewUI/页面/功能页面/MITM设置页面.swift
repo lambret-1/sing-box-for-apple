@@ -2,101 +2,176 @@
 //  页面/功能页面/MITM设置页面.swift
 //  sing-box-for-apple 新UI
 //
-//  骨架阶段 - 数据待对接
-//  HTTPS 中间人解密设置页面骨架：MITM 开关、证书状态、证书操作、排除域名列表
+//  HTTPS 中间人解密设置页面：MITM 开关、证书状态、证书操作、域名排除、TLS指纹
 //
 
 import SwiftUI
 
 // MARK: - 页面主体
 
-/// MITM 设置页面骨架
-///
-/// 通过 NavigationLink 从配置管理弹窗 push 进入，导航栈由外层弹窗容器提供。
+/// MITM 设置页面
 struct MITM设置页面: View {
-    /// 是否启用 MITM（骨架占位状态）
-    @State private var 启用MITM = false
-    /// 提示文案（占位按钮点击后弹出）
-    @State private var 提示: String?
+    /// MITM 全局状态
+    @ObservedObject var mitm = MITM状态.共享
 
-    // TODO: 第六阶段对接官方 MITM 配置
-    /// 排除域名列表（静态占位，3 条）
-    private let 排除域名列表: [String] = [
-        "*.apple.com",
-        "*.icloud.com",
-        "*.microsoft.com"
-    ]
+    /// 提示文案
+    @State private var 提示: String?
+    /// 是否显示证书详情
+    @State private var 显示证书详情 = false
+    /// 新排除域名输入
+    @State private var 新排除域名 = ""
+    /// 新排除备注
+    @State private var 新排除备注 = ""
 
     var body: some View {
         List {
-            // MARK: 开关 Section
+            // MARK: 总开关
             Section {
                 AppFormRow(标签: "启用 MITM", 说明: "解密 HTTPS 流量以进行抓包与重写（需安装根证书）") {
-                    Toggle("", isOn: $启用MITM).labelsHidden()
+                    Toggle("", isOn: $mitm.启用MITM).labelsHidden()
                 }
+
+                AppFormRow(标签: "抓包日志", 说明: "记录 HTTP 请求/响应日志用于分析") {
+                    Toggle("", isOn: $mitm.启用抓包).labelsHidden()
+                }
+
+                AppFormRow(标签: "HTTP/2 支持", 说明: "解密 HTTP/2 流量（兼容性可能下降）") {
+                    Toggle("", isOn: $mitm.启用HTTP2).labelsHidden()
+                }
+            }
+
+            // MARK: TLS 指纹
+            Section("TLS 指纹模拟") {
+                Picker("指纹类型", selection: $mitm.TLS指纹) {
+                    ForEach(TLS指纹类型.allCases) { 类型 in
+                        Text(类型.显示名称).tag(类型)
+                    }
+                }
+                Text("模拟浏览器 TLS 握手指纹，降低 WAF 识别概率")
+                    .font(字体层级.辅助说明)
+                    .foregroundColor(.次要文字)
             }
 
             // MARK: 证书状态
             Section("证书状态") {
                 HStack(spacing: 间距常量.中等) {
-                    Image(systemName: "lock.slash")
-                        .foregroundColor(.警告色)
+                    Image(systemName: 证书状态图标)
+                        .foregroundColor(证书状态颜色)
                         .frame(width: 24)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("未安装证书")
+                        Text(证书状态标题)
                             .font(字体层级.正文)
                             .foregroundColor(.primary)
-                        Text("MITM 解密需要先在系统中信任根证书")
+                        Text(mitm.证书状态.描述)
                             .font(字体层级.辅助说明)
                             .foregroundColor(.次要文字)
                     }
                     Spacer()
-                    StateBadge(文字: "未安装", 类型: .警告, 带圆点: true)
+                    StateBadge(文字: 证书状态徽标文字, 类型: 证书状态徽标类型, 带圆点: true)
                 }
                 .padding(.vertical, 间距常量.紧凑 / 2)
+
+                Button {
+                    显示证书详情 = true
+                } label: {
+                    HStack {
+                        Text("查看证书详情")
+                            .font(字体层级.正文)
+                            .foregroundColor(.主题色)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12))
+                            .foregroundColor(.次要文字)
+                    }
+                }
             }
 
             // MARK: 证书操作
             Section("证书操作") {
-                证书操作行(图标: "arrow.down.doc", 标题: "生成证书", 说明: "生成新的 MITM 根证书") {
-                    提示 = "后续阶段支持"
-                }
                 证书操作行(图标: "square.and.arrow.up", 标题: "导出证书", 说明: "导出 .cer 文件用于手动安装") {
-                    提示 = "后续阶段支持"
+                    提示 = "证书导出将在隧道启动后通过 Clash API 获取"
                 }
                 证书操作行(图标: "graduationcap", 标题: "安装引导", 说明: "跳转系统设置完成证书信任") {
-                    提示 = "后续阶段支持"
+                    提示 = "请在 Safari 中打开证书描述文件进行安装"
+                }
+                证书操作行(图标: "arrow.triangle.2.circlepath", 标题: "重新生成", 说明: "生成新的 CA 证书（旧证书将失效）") {
+                    提示 = "证书将重新生成，已安装的旧证书需删除"
                 }
             }
 
-            // MARK: 排除域名列表
-            Section("排除域名（不解密）") {
-                ForEach(排除域名列表, id: \.self) { 域名 in
+            // MARK: 域名排除
+            Section {
+                ForEach(mitm.域名排除列表) { 项 in
                     HStack(spacing: 间距常量.中等) {
                         Image(systemName: "nosign")
                             .foregroundColor(.次要文字)
                             .frame(width: 24)
-                        Text(域名)
-                            .font(字体层级.正文)
-                            .foregroundColor(.primary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(项.域名)
+                                .font(字体层级.正文)
+                                .foregroundColor(.primary)
+                            if !项.备注.isEmpty {
+                                Text(项.备注)
+                                    .font(字体层级.辅助说明)
+                                    .foregroundColor(.次要文字)
+                            }
+                        }
                         Spacer()
+                        Toggle("", isOn: Binding(
+                            get: { 项.启用 },
+                            set: { _ in
+                                if let 索引 = mitm.域名排除列表.firstIndex(where: { $0.id == 项.id }) {
+                                    mitm.域名排除列表[索引].启用.toggle()
+                                }
+                            }
+                        )).labelsHidden()
                     }
+                }
+                .onDelete(perform: 删除域名排除)
+
+                HStack {
+                    TextField("添加排除域名（如 *.example.com）", text: $新排除域名)
+                        .font(字体层级.正文)
+                    Button("添加") {
+                        添加域名排除()
+                    }
+                    .disabled(新排除域名.isEmpty)
+                }
+            } header: {
+                HStack {
+                    Text("域名排除（不解密）")
+                    Spacer()
+                    EditButton()
+                        .font(字体层级.辅助说明)
+                }
+            } footer: {
+                Text("对这些域名跳过 MITM 解密，直接透传原始 TLS，适用于强 WAF 站点")
+            }
+
+            // MARK: 功能入口
+            Section("高级功能") {
+                NavigationLink {
+                    圈X脚本列表页面()
+                } label: {
+                    功能入口行(图标: "curlybraces", 标题: "圈 X 脚本", 说明: "自定义 JS 请求/响应脚本", 数量: mitm.脚本列表.filter { $0.启用 }.count)
+                }
+
+                NavigationLink {
+                    重写规则设置页面()
+                } label: {
+                    功能入口行(图标: "arrow.triangle.turn.up.right.diamond", 标题: "重写规则", 说明: "URL/请求头/响应体重写", 数量: mitm.重写规则列表.filter { $0.启用 }.count)
+                }
+
+                NavigationLink {
+                    抓包列表页面()
+                } label: {
+                    功能入口行(图标: "doc.text.magnifyingglass", 标题: "HTTP 抓包", 说明: "查看捕获的 HTTP 请求记录", 数量: mitm.抓包记录列表.count)
                 }
             }
         }
         .listStyle(.insetGrouped)
         .navigationTitle("MITM 解密")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    提示 = "后续阶段支持"
-                } label: {
-                    Image(systemName: "plus")
-                }
-                .accessibilityLabel("添加排除域名")
-            }
-        }
         .alert("提示", isPresented: Binding(
             get: { 提示 != nil },
             set: { if !$0 { 提示 = nil } }
@@ -105,20 +180,86 @@ struct MITM设置页面: View {
         } message: {
             Text(提示 ?? "")
         }
+        .sheet(isPresented: $显示证书详情) {
+            证书详情页面()
+        }
+    }
+
+    // MARK: - 计算属性
+
+    private var 证书状态图标: String {
+        switch mitm.证书状态 {
+        case .就绪: return "checkmark.shield.fill"
+        case .未安装: return "arrow.down.circle.dotted"
+        case .未信任: return "lock.shield"
+        case .文件缺失: return "questionmark.folder"
+        case .已过期: return "exclamationmark.triangle"
+        case .文件损坏: return "xmark.shield"
+        case .临近过期: return "clock.badge.exclamationmark"
+        }
+    }
+
+    private var 证书状态颜色: Color {
+        switch mitm.证书状态 {
+        case .就绪: return .成功色
+        case .未安装, .未信任: return .警告色
+        case .文件缺失, .已过期, .文件损坏: return .危险色
+        case .临近过期: return .警告色
+        }
+    }
+
+    private var 证书状态标题: String {
+        switch mitm.证书状态 {
+        case .就绪: return "证书已就绪"
+        case .未安装: return "证书未安装"
+        case .未信任: return "证书未信任"
+        case .文件缺失: return "证书文件缺失"
+        case .已过期: return "证书已过期"
+        case .文件损坏: return "证书已损坏"
+        case .临近过期: return "证书即将过期"
+        }
+    }
+
+    private var 证书状态徽标文字: String {
+        switch mitm.证书状态 {
+        case .就绪: return "正常"
+        case .未安装: return "待安装"
+        case .未信任: return "待信任"
+        case .文件缺失: return "缺失"
+        case .已过期: return "过期"
+        case .文件损坏: return "损坏"
+        case .临近过期(let 天数): return "\(天数)天"
+        }
+    }
+
+    private var 证书状态徽标类型: StateBadge类型 {
+        switch mitm.证书状态 {
+        case .就绪: return .成功
+        case .未安装, .未信任, .临近过期: return .警告
+        case .文件缺失, .已过期, .文件损坏: return .错误
+        }
+    }
+
+    // MARK: - 方法
+
+    private func 添加域名排除() {
+        let 域名 = 新排除域名.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !域名.isEmpty else { return }
+        mitm.域名排除列表.append(域名排除项(域名: 域名, 备注: "", 启用: true))
+        新排除域名 = ""
+    }
+
+    private func 删除域名排除(at offsets: IndexSet) {
+        mitm.域名排除列表.remove(atOffsets: offsets)
     }
 }
 
 // MARK: - 子视图
 
-/// 证书操作行：图标 + 标题 + 说明 + 点击触发
 private struct 证书操作行: View {
-    /// SF Symbols 图标
     let 图标: String
-    /// 标题
     let 标题: String
-    /// 说明
     let 说明: String
-    /// 点击回调
     let 动作: () -> Void
 
     var body: some View {
@@ -143,6 +284,81 @@ private struct 证书操作行: View {
                     .foregroundColor(.次要文字)
             }
             .padding(.vertical, 间距常量.紧凑 / 2)
+        }
+    }
+}
+
+private struct 功能入口行: View {
+    let 图标: String
+    let 标题: String
+    let 说明: String
+    let 数量: Int
+
+    var body: some View {
+        HStack(spacing: 间距常量.中等) {
+            Image(systemName: 图标)
+                .foregroundColor(.主题色)
+                .frame(width: 24)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(标题)
+                    .font(字体层级.正文)
+                    .foregroundColor(.primary)
+                Text(说明)
+                    .font(字体层级.辅助说明)
+                    .foregroundColor(.次要文字)
+            }
+            Spacer()
+            if 数量 > 0 {
+                StateBadge(文字: "\(数量)", 类型: .信息, 带圆点: false)
+            }
+        }
+        .padding(.vertical, 间距常量.紧凑 / 2)
+    }
+}
+
+// MARK: - 证书详情页面
+
+struct 证书详情页面: View {
+    @ObservedObject var mitm = MITM状态.共享
+    @Environment(\.dismiss) private var 关闭
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("证书信息") {
+                    详情行(标签: "颁发者", 值: "sing-box MITM CA")
+                    详情行(标签: "有效期", 值: "10 年（自生成起）")
+                    详情行(标签: "密钥类型", 值: "RSA 2048")
+                    详情行(标签: "指纹算法", 值: "SHA-256")
+                }
+
+                Section("证书内容（PEM）") {
+                    Text(mitm.CA证书PEM)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundColor(.次要文字)
+                        .textSelection(.enabled)
+                }
+            }
+            .listStyle(.insetGrouped)
+            .navigationTitle("证书详情")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("完成") { 关闭() }
+                }
+            }
+        }
+    }
+
+    private func 详情行(标签: String, 值: String) -> some View {
+        HStack {
+            Text(标签)
+                .font(字体层级.正文)
+                .foregroundColor(.次要文字)
+            Spacer()
+            Text(值)
+                .font(字体层级.正文)
+                .foregroundColor(.primary)
         }
     }
 }
