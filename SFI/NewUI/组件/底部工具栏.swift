@@ -22,7 +22,6 @@ struct 底部工具栏: View {
     /// 左右边距
     private let 左右边距: CGFloat = 20
     /// 重按最短持续时间（秒）
-    private let 重按最短时间: Double = 0.5
     /// 图标旋转角度（连接状态下持续旋转）
     @State private var 旋转角度: Double = 0
 
@@ -83,7 +82,7 @@ struct 底部工具栏: View {
         }
     }
 
-    /// 设置按钮（SF Symbols 图标，点击打开设置弹窗，重按触发运行模式面板）
+    /// 设置按钮（点击打开设置弹窗，长按弹出 ContextMenu 选择运行模式）
     private func 设置按钮(弹窗类型: 底部弹窗类型) -> some View {
         Image(systemName: 弹窗类型.图标)
             .font(.system(size: 24, weight: .regular))
@@ -94,8 +93,12 @@ struct 底部工具栏: View {
             .onTapGesture {
                 状态.当前底部弹窗 = 弹窗类型
             }
-            .onLongPressGesture(minimumDuration: 重按最短时间) {
-                状态.显示运行模式面板 = true
+            .contextMenu {
+                Button {
+                    状态.显示运行模式面板 = true
+                } label: {
+                    Label("运行模式", systemImage: "circle.grid.2x2.fill")
+                }
             }
     }
 }
