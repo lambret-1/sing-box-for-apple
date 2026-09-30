@@ -10,6 +10,9 @@
 import SwiftUI
 import NetworkExtension
 import Library
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// 新UI入口视图
 struct 新UI入口视图: View {
@@ -82,8 +85,8 @@ private struct 配置安装引导视图: View {
     @EnvironmentObject private var 状态: 新UI状态
     /// 是否正在安装
     @State private var 安装中 = false
-    /// 错误信息
-    @State private var 错误: String?
+    /// 错误弹窗信息（nil 表示不显示）
+    @State private var 错误弹窗: String?
 
     var body: some View {
         VStack(spacing: 间距常量.宽松) {
@@ -103,15 +106,7 @@ private struct 配置安装引导视图: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 间距常量.宽松)
 
-            if let 错误 {
-                Text(错误)
-                    .font(字体层级.辅助说明)
-                    .foregroundColor(.危险色)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 间距常量.宽松)
-            }
-
-            AppButton("安装 VPN 配置", 样式: .主要, 加载中: 安装中) {
+            AppButton("安装网络扩展", 样式: .主要, 加载中: 安装中) {
                 安装配置()
             }
             .padding(.horizontal, 间距常量.宽松)
@@ -120,11 +115,32 @@ private struct 配置安装引导视图: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.页面背景)
+        // 官方风格错误弹窗：错误标题 + 详情 + 复制/好按钮
+        .alert("错误", isPresented: Binding(
+            get: { 错误弹窗 != nil },
+            set: { if !$0 { 错误弹窗 = nil } }
+        )) {
+            Button("复制") {
+                if let 错误 = 错误弹窗 {
+                    #if canImport(UIKit)
+                    UIPasteboard.general.string = 错误
+                    #endif
+                }
+                错误弹窗 = nil
+            }
+            Button("好", role: .cancel) {
+                错误弹窗 = nil
+            }
+        } message: {
+            if let 错误 = 错误弹窗 {
+                Text(错误)
+            }
+        }
     }
 
     /// 安装 VPN 网络扩展配置
     private func 安装配置() {
-        错误 = nil
+        错误弹窗 = nil
         安装中 = true
         Task { @MainActor in
             defer { 安装中 = false }
@@ -134,7 +150,8 @@ private struct 配置安装引导视图: View {
                 // 安装成功后重新加载
                 await 环境.reload()
             } catch {
-                错误 = error.localizedDescription
+                // 安装失败，弹出官方风格错误弹窗
+                错误弹窗 = "Failed to install network extension\n\(error.localizedDescription)"
             }
         }
     }
