@@ -53,9 +53,8 @@ jobs:
           echo "缓存未命中，从 lambret-1/sing-box dev-mitm 分支编译 Libbox..."
           git clone --depth 1 --branch dev-mitm https://github.com/lambret-1/sing-box.git sing-box-src
           cd sing-box-src
-          sed -i '' 's/darwinTags = append(darwinTags, "with_dhcp", "grpcnotrace")/darwinTags = append(darwinTags, "with_dhcp", "grpcnotrace", "with_gvisor")/' cmd/internal/build_libbox/main.go
-          echo "已注入 with_gvisor 标签："
-          grep "darwinTags = append" cmd/internal/build_libbox/main.go
+          echo "dev-mitm 分支已内置 gvisor 标签，无需注入"
+          grep "sharedTags = append" cmd/internal/build_libbox/main.go
           export PATH=$PATH:$(go env GOPATH)/bin
           go run ./cmd/internal/build_libbox -target apple
           LIBBOX_PATH=$(find . -name "Libbox.xcframework" -type d | head -1)
