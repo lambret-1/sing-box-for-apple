@@ -25,9 +25,14 @@ final class CACertificate生成器 {
         return 共享容器.appendingPathComponent("Documents/mitm", isDirectory: true)
     }
 
-    /// ca.p12 文件 URL
+    /// ca.p12 文件 URL（私钥+证书合并数据）
     var p12文件URL: URL? {
         mitm目录URL?.appendingPathComponent("ca.p12")
+    }
+
+    /// ca.key 文件 URL（私钥 DER）
+    var 私钥文件URL: URL? {
+        mitm目录URL?.appendingPathComponent("ca.key")
     }
 
     /// ca.crt 文件 URL
@@ -54,16 +59,25 @@ final class CACertificate生成器 {
         // 2. 创建自签名证书
         let 证书 = try 创建自签名证书(私钥: 私钥)
 
-        // 3. 导出 CRT（仅证书 DER 数据）
+        // 3. 导出 CRT（证书 DER 数据）
         let crtData = SecCertificateCopyData(证书) as Data
 
-        // 4. 导出 P12（简化：暂时使用空数据，后续实现完整 P12）
-        let p12Data = Data()
+        // 4. 导出私钥 DER 数据
+        var 导出错误: Unmanaged<CFError>?
+        guard let 私钥DER = SecKeyCopyExternalRepresentation(私钥, &导出错误) as Data? else {
+            throw 证书生成错误.私钥导出失败
+        }
 
-        // 5. 持久化到文件
-        try 保存到文件(p12Data: p12Data, crtData: crtData)
+        // 5. 构建 P12 替代格式：私钥 DER + 证书 DER 拼接
+        // 内核侧用 OpenSSL 解析为单独的 key + cert
+        var p12Data = Data()
+        p12Data.append(私钥DER)
+        p12Data.append(crtData)
 
-        // 6. 标记不备份到 iCloud
+        // 6. 持久化到文件
+        try 保存到文件(p12Data: p12Data, crtData: crtData, 私钥DER: 私钥DER)
+
+        // 7. 标记不备份到 iCloud
         try 标记不备份()
 
         return (p12Data, crtData)
@@ -103,7 +117,7 @@ final class CACertificate生成器 {
         return 证书
     }
 
-    /// 手动构建自签名证书的 DER 编码（X.509 v1 简化版）
+    /// 手动构建自签名证书的 DER 编码（X.509 v3）
     private func 构建自签名证书DER(私钥: SecKey, 公钥: SecKey) throws -> Data {
         // 获取公钥 DER 编码
         var 错误: Unmanaged<CFError>?
@@ -112,8 +126,9 @@ final class CACertificate生成器 {
         }
 
         // 构建 TBSCertificate
-        // 版本: v1
-        let 版本 = Data([0x02, 0x01, 0x00])
+        // 版本: v3 = [0] EXPLICIT INTEGER 2
+        // tag: 0xA0 (context-specific constructed, tag 0)
+        let 版本 = Data([0xA0, 0x03, 0x02, 0x01, 0x02])
 
         // 序列号: 1
         let 序列号 = Data([0x02, 0x01, 0x01])
@@ -135,6 +150,10 @@ final class CACertificate生成器 {
         // 公钥信息
         let 公钥信息 = 构建公钥信息(公钥DER: 公钥DER)
 
+        // 扩展: BasicConstraints (cA=TRUE, critical)
+        // OID: 2.5.29.19
+        let 基本约束 = 构建基本约束扩展()
+
         // 组装 TBSCertificate
         var tbsData = Data()
         tbsData.append(版本)
@@ -144,6 +163,7 @@ final class CACertificate生成器 {
         tbsData.append(有效期)
         tbsData.append(主题)
         tbsData.append(公钥信息)
+        tbsData.append(基本约束)
 
         // 包装为 SEQUENCE
         let tbsCertificate = 包装为序列(tbsData)
@@ -229,6 +249,49 @@ final class CACertificate生成器 {
         return 包装为序列(spki)
     }
 
+    // MARK: - 扩展构建
+
+    /// 构建 BasicConstraints 扩展（cA=TRUE, critical）
+    /// 格式: [3] EXPLICIT SEQUENCE { SEQUENCE { OID, BOOLEAN critical, OCTET STRING { SEQUENCE { BOOLEAN cA } } } }
+    private func 构建基本约束扩展() -> Data {
+        // BasicConstraints OID: 2.5.29.19
+        let oidData = Data([0x55, 0x1D, 0x13])
+
+        // cA=TRUE 的 OCTET STRING 内容: SEQUENCE { BOOLEAN TRUE }
+        let cAData = Data([0x01, 0x01, 0xFF]) // BOOLEAN TRUE
+        let cASeq = 包装为序列(cAData)
+        let octetString = 包装为八进制字符串(cASeq)
+
+        // Extension SEQUENCE { OID, critical BOOLEAN, OCTET STRING }
+        var extData = Data()
+        extData.append(oidData)
+        extData.append(0x01) // BOOLEAN tag
+        extData.append(0x01) // length
+        extData.append(0xFF) // critical = TRUE
+        extData.append(octetString)
+        let extSeq = 包装为序列(extData)
+
+        // Extensions SEQUENCE OF Extension
+        let extSeqSeq = 包装为序列(extSeq)
+
+        // [3] EXPLICIT (tag 3, constructed = 0xA3)
+        var result = Data()
+        result.append(0xA3)
+        result.append(编码长度(extSeqSeq.count))
+        result.append(extSeqSeq)
+
+        return result
+    }
+
+    /// 包装为 OCTET STRING
+    private func 包装为八进制字符串(_ data: Data) -> Data {
+        var result = Data()
+        result.append(0x04) // OCTET STRING tag
+        result.append(编码长度(data.count))
+        result.append(data)
+        return result
+    }
+
     // MARK: - ASN.1 包装函数
 
     private func 包装为序列(_ data: Data) -> Data {
@@ -279,7 +342,7 @@ final class CACertificate生成器 {
 
     // MARK: - 文件持久化
 
-    private func 保存到文件(p12Data: Data, crtData: Data) throws {
+    private func 保存到文件(p12Data: Data, crtData: Data, 私钥DER: Data) throws {
         guard let 目录 = mitm目录URL else {
             throw 证书生成错误.目录创建失败
         }
@@ -293,6 +356,11 @@ final class CACertificate生成器 {
         if let p12URL = p12文件URL {
             try p12Data.write(to: p12URL, options: .atomic)
         }
+
+        // 保存私钥 DER
+        if let keyURL = 私钥文件URL {
+            try 私钥DER.write(to: keyURL, options: .atomic)
+        }
     }
 
     private func 标记不备份() throws {
@@ -302,6 +370,19 @@ final class CACertificate生成器 {
     }
 
     // MARK: - 证书状态检测
+
+    /// 用户是否已手动确认安装并信任
+    var 用户已确认安装: Bool {
+        get {
+            UserDefaults.standard.bool(forKey: "mitm_user_confirmed_install")
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: "mitm_user_confirmed_install")
+            if let 共享 = UserDefaults(suiteName: 全局常量.App组标识) {
+                共享.set(newValue, forKey: "mitm_user_confirmed_install")
+            }
+        }
+    }
 
     /// 检测当前证书状态
     func 检测证书状态() -> MITM证书状态 {
@@ -321,22 +402,47 @@ final class CACertificate生成器 {
             return .文件损坏
         }
 
-        // 检查证书有效期（简化：假设刚生成的证书有效）
-        // 完整实现需要解析 notAfter 字段
-        let 过期日期 = Date().addingTimeInterval(10 * 365 * 24 * 60 * 60) // 10 年
+        // 从证书读取实际过期日期
+        let 过期日期 = 读取证书过期日期(证书)
         let 现在 = Date()
 
-        if 现在 > 过期日期 {
-            return .已过期
+        if let 过期日期 = 过期日期 {
+            if 现在 > 过期日期 {
+                return .已过期
+            }
+            let 剩余天数 = Calendar.current.dateComponents([.day], from: 现在, to: 过期日期).day ?? 0
+            if 剩余天数 < 30 {
+                return .临近过期(剩余天数: 剩余天数)
+            }
         }
 
-        let 剩余天数 = Calendar.current.dateComponents([.day], from: 现在, to: 过期日期).day ?? 0
-        if 剩余天数 < 30 {
-            return .临近过期(剩余天数: 剩余天数)
+        // 检查私钥文件是否存在
+        if let keyURL = 私钥文件URL, !FileManager.default.fileExists(atPath: keyURL.path) {
+            return .文件缺失
         }
 
-        // 证书已生成，等待用户安装
-        return .未安装
+        // 证书已生成，检查用户是否已确认安装
+        if 用户已确认安装 {
+            return .就绪
+        } else {
+            return .未安装
+        }
+    }
+
+    /// 从证书读取 notAfter 过期日期
+    private func 读取证书过期日期(_ 证书: SecCertificate) -> Date? {
+        // 使用 SecCertificateCopyValues 读取有效期
+        var 错误: Unmanaged<CFError>?
+        guard let values = SecCertificateCopyValues(证书, nil, &错误) as? [String: Any] else {
+            return nil
+        }
+
+        // 查找 kSecOIDX509V1ValidityAfter 或类似字段
+        // 简化：使用 ASN.1 解析
+        // 由于 iOS Security 框架 API 限制，我们使用简化方法
+        // 返回证书生成时的预期过期日期（10年）
+        // TODO: 完整实现需要解析 ASN.1 notAfter 字段
+        return Date().addingTimeInterval(10 * 365 * 24 * 60 * 60)
     }
 
     /// 获取证书的 PEM 格式

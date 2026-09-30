@@ -268,6 +268,9 @@ final class MITM状态: ObservableObject {
 
     // MARK: - 证书管理
 
+    /// 证书生成错误信息
+    @Published var 证书生成错误: String?
+
     /// 确保 CA 证书已生成，如不存在则自动生成
     func 确保证书已生成() async {
         let 生成器 = CACertificate生成器.共享
@@ -275,12 +278,15 @@ final class MITM状态: ObservableObject {
         if case .文件缺失 = 状态 {
             do {
                 try 生成器.生成CA证书()
+                证书生成错误 = nil
             } catch {
+                证书生成错误 = "证书生成失败：\(error.localizedDescription)"
                 print("[MITM] CA 证书生成失败：\(error.localizedDescription)")
             }
         }
         // 更新 PEM 缓存
         CA证书PEM = 生成器.获取证书PEM() ?? ""
+        证书状态 = 生成器.检测证书状态()
     }
 
     /// 刷新证书状态
@@ -293,7 +299,16 @@ final class MITM状态: ObservableObject {
     /// 重新生成 CA 证书
     func 重新生成证书() throws {
         let 生成器 = CACertificate生成器.共享
+        // 清除用户已确认标记
+        生成器.用户已确认安装 = false
         try 生成器.生成CA证书()
+        证书生成错误 = nil
+        刷新证书状态()
+    }
+
+    /// 用户确认已安装并信任证书
+    func 用户确认已安装信任() {
+        CACertificate生成器.共享.用户已确认安装 = true
         刷新证书状态()
     }
 

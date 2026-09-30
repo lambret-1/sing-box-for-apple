@@ -95,6 +95,34 @@ struct MITM设置页面: View {
                 }
             }
 
+            // MARK: 证书错误提示
+            if let 错误信息 = mitm.证书生成错误 {
+                Section {
+                    HStack(spacing: 间距常量.中等) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.危险色)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("证书生成失败")
+                                .font(字体层级.卡片标题)
+                                .foregroundColor(.危险色)
+                            Text(错误信息)
+                                .font(字体层级.辅助说明)
+                                .foregroundColor(.次要文字)
+                        }
+                        Spacer()
+                    }
+                    Button("重试生成") {
+                        do {
+                            try mitm.重新生成证书()
+                        } catch {
+                            mitm.证书生成错误 = error.localizedDescription
+                        }
+                    }
+                    .font(字体层级.按钮文字)
+                    .foregroundColor(.主题色)
+                }
+            }
+
             // MARK: 证书操作
             Section("证书操作") {
                 证书操作行(图标: "square.and.arrow.up", 标题: "导出证书", 说明: "导出 .mobileconfig 描述文件供安装") {
@@ -103,6 +131,30 @@ struct MITM设置页面: View {
                 证书操作行(图标: "graduationcap", 标题: "安装引导", 说明: "三步引导完成证书安装与信任") {
                     显示安装引导 = true
                 }
+
+                // 用户确认安装按钮
+                if case .未安装 = mitm.证书状态 {
+                    Button {
+                        mitm.用户确认已安装信任()
+                    } label: {
+                        HStack(spacing: 间距常量.中等) {
+                            Image(systemName: "checkmark.circle")
+                                .foregroundColor(.成功色)
+                                .frame(width: 24)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("我已安装并信任")
+                                    .font(字体层级.正文)
+                                    .foregroundColor(.primary)
+                                Text("点击确认证书已安装完成")
+                                    .font(字体层级.辅助说明)
+                                    .foregroundColor(.次要文字)
+                            }
+                            Spacer()
+                        }
+                        .padding(.vertical, 间距常量.紧凑 / 2)
+                    }
+                }
+
                 证书操作行(图标: "arrow.triangle.2.circlepath", 标题: "重新生成", 说明: "生成新的 CA 证书（旧证书将失效）") {
                     显示重新生成确认 = true
                 }
