@@ -34,7 +34,7 @@ struct 仪表盘视图: View {
             ScrollView {
                 VStack(spacing: 间距常量.中等) {
                     // 官方配置卡片（日志页不显示，避免占用日志输出空间）
-                    if 状态.当前选中内容区 != .规则与日志 {
+                    if 状态.当前顶部卡片 != .规则与日志 {
                         ProfileCard(
                             profileList: $状态.配置列表,
                             selectedProfileID: $状态.当前选中配置
