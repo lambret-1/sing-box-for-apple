@@ -22,7 +22,7 @@ struct VLESS转换器页面: View {
     @State private var 显示导入确认: Bool = false
     @State private var 导入结果提示: String?
     @State private var 显示导入结果: Bool = false
-    @State private var 文件导入结果: String?
+    @State private var 文件导入提示: String?
     @State private var 显示文件导入提示: Bool = false
 
     var body: some View {
