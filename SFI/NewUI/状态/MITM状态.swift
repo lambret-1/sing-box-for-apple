@@ -253,70 +253,58 @@ final class MITM状态: ObservableObject {
     private let 键前缀 = "mitm_"
     private var 共享默认: UserDefaults? { UserDefaults(suiteName: 全局常量.App组标识) }
 
-    private static let 预生成CA证书 = """
------BEGIN CERTIFICATE-----
-MIIDuzCCAqOgAwIBAgIUPse4zPDlPWZCRUNE5DN98+ihzlswDQYJKoZIhvcNAQEL
-BQAwbTELMAkGA1UEBhMCQ04xEjAQBgNVBAgMCUd1YW5nZG9uZzERMA8GA1UEBwwI
-RG9uZ2d1YW4xDzANBgNVBAoMBk5ld1ZQTjENMAsGA1UECwwETUlUTTEXMBUGA1UE
-AwwOTmV3VlBOIE1JVE0gQ0EwHhcNMjYwOTI3MDUyMTAxWhcNMzYwOTI0MDUyMTAx
-WjBtMQswCQYDVQQGEwJDTjESMBAGA1UECAwJR3Vhbmdkb25nMREwDwYDVQQHDAhE
-b25nZ3VhbjEPMA0GA1UECgwGTmV3VlBOMQ0wCwYDVQQLDARNSVRNMRcwFQYDVQQD
-DA5OZXdWUE4gTUlUTSBDQTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEB
-AM8pq8n3d6ocmbJAnHBg82Usr7zJDaxch4BKEQYjZ+rXF5NCjvrej7OLrzA624ME
-EHzkWvM4lHrPFcwBDeNpm4KShdh3mr5fLf/qs1Yk4ar2sIKL5OwE6uRPpjwC53L9
-xShMxn26Wu+m3i5iYpW/GM63JIDNR2DDDBhU0TbwJIleD94/9wDCtCqQJUCKn1nK
-TJ4M9NCd7Le4yfqfWxyAl5elHJQIUiEp8c27ktVew2FiRJMLxqlvLzLb0M16P1kw
-DRtC7u7gTt2/SLYxAyLz8OCR3ep9EVzTGYWfszhCZu3MMnh1NgZnWdEQn9zAqAyJ
-q8TFMmEdFfaf6xMbLu/0z2MCAwEAAaNTMFEwHQYDVR0OBBYEFHIM5TzRO29Noehn
-N7zh3Ir1pue+MB8GA1UdIwQYMBaAFHIM5TzRO29NoehnN7zh3Ir1pue+MA8GA1Ud
-EwEB/wQFMAMBAf8wDQYJKoZIhvcNAQELBQADggEBABU5Bsjr6tR/b0hKV3SdX245
-G5fwLZ/EUa+j6SDtzgx3mvjaZ1bNGZbGRFuTGqTkLAF6QSS5aZRfse4RILRs4nnx
-1hrWl7oFjlniHtwDskcAfsCu0JrtACpLhQk/Qu9XteORzeJMiY5HUo+FPF03ja/V
-y214yyOHcp68iytOvesorZcYn1ucqeNYTpzhAr2wIuT4VgV8cWRssVJ+OWDgT7xr
-QKBw/dSbFUbUDZcFmxa4S49UPLwH4Fo40am4WLxV/+RGGQmhipacSxF3l4H4We/m
-HyLugfYN59l4OCPjUplaSIifgDd9/131N0OPyi0gJFFD4+4pASgCCUQCsIflqjk=
------END CERTIFICATE-----
-"""
-
-    private static let 预生成CA私钥 = """
------BEGIN PRIVATE KEY-----
-MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDPKavJ93eqHJmy
-QJxwYPNlLK+8yQ2sXIeAShEGI2fq1xeTQo763o+zi68wOtuDBBB85FrzOJR6zxXM
-AQ3jaZuCkoXYd5q+Xy3/6rNWJOGq9rCCi+TsBOrkT6Y8Audy/cUoTMZ9ulrvpt4u
-YmKVvxjOtySAzUdgwwwYVNE28CSJXg/eP/cAwrQqkCVAip9ZykyeDPTQney3uMn6
-n1scgJeXpRyUCFIhKfHNu5LVXsNhYkSTC8apby8y29DNej9ZMA0bQu7u4E7dv0i2
-MQMi8/Dgkd3qfRFc0xmFn7M4QmbtzDJ4dTYGZ1nREJ/cwKgMiavExTJhHRX2n+sT
-Gy7v9M9jAgMBAAECggEAGOt21kM1+lkZZfdeuif3b166PxfiVK8Gv7hpJtdgez/n
-fpfdkjDukVcGumMCH9b/0r43cJWISuOZSCKCVK5R/hl5D0qH60mQw32sl/q0yLeH
-ERUZ8wg+ZztrkEF7LPp42nmt0Nb3dGeax3KfUEseBVPDiNjosquTy2N8jULC6mEW
-WPNhLlNVj7oL9Ze6jqBbK8uoyLTYS7ZPGODKgKZjgl2b+8Ut367H4Pg3iHmT5ivt
-KqvjQ0q9vgf5maMA9zHnhcGAnZrgvPDLMQFEZzRurwvmKOmJxbh8eoksh39ot0xZ
-NcjYZnygX+EqFlacJoWTfq6bU69amnOQMIX8m+z+JQKBgQDlkG/92O2SLrXJpHoi
-/hEC5uv53wMXs3c52+KWrEKXeEOmj5/DIZo6xEh7ObNYMmTqpu7dxSaWpGsyIO6W
-q3Y+Dcqw1FroDBRbYScr+XcTPgvJHUphPsrM+QvL491IKfltTlhbct/RlQUkvdqR
-eRogekoLHNrQXAznPbJL85YaNQKBgQDnBNakZQsfYk0o4ehP2+F+90jWj/A8V+9x
-+qnjYxP1i12NjDiTQbhJsUx/g90GbabZRx3ODAvnKhd2FEsEryBZ4p70VoPU8MJq
-u5bTEkZlZ5lY4xgzSHt5T/IncRpge7s+SLdzg0aflRWQmfbxJYpEzNcVdkcJOg84
-HLbmAjY2NwKBgQDbXvpWRw1Hi1F2nrGEbOuOrWNFBWLsLDi71q8iMvzzyB5FtawD
-CUJb9CQbdVk35/hd8CYFURf+DqLNZYD6BGHbDMzrzBIO+zQc2qtXL24luj4C8vWY
-FiwwUbF/JoHYKxxK4vo2cYEGw3QF11Ndfq+D57iIBAvp3n0KIQAX6m8/HQKBgFIi
-6UG33zWAWNixQUyra8gdmZsXwB1kUnDe42pCPsVtkIyUD0Vj92bUD9PCiWIQuGLG
-IzWwGMdOstq7qlR3A3SR21waKnMaSrVyDtTqyXaiV+Y/j8oj+iqOnxUg5HTraQ5j
-Aj6irQhuFCW+aAsjAr8laU9rJySDrQeRRgIPRUEPAoGAEc9OXlRTOlRyXKM7i0u5
-Dak44bGFA7IMTWg4S8WrOfcDKhQl2s3OUyl/eLeFE1ip6DUTzzPqzCAONIFBfPF0
-jK+8aP0c5duJvLOAsAuioD2+bqXEDVXK4FhX9IzgYxO7oKsTTE2VKNhNie49SFeK
-FxBzaz833X+KGgOv4VBtDcY=
------END PRIVATE KEY-----
-"""
-
     private init() {
         加载配置()
         加载脚本列表()
         加载重写规则()
         加载本地映射()
         加载域名排除()
-        CA证书PEM = Self.预生成CA证书
-        CA私钥PEM = Self.预生成CA私钥
+        // 启动时自动生成证书（如不存在）
+        Task { @MainActor in
+            await 确保证书已生成()
+            刷新证书状态()
+        }
+    }
+
+    // MARK: - 证书管理
+
+    /// 确保 CA 证书已生成，如不存在则自动生成
+    func 确保证书已生成() async {
+        let 生成器 = CACertificate生成器.共享
+        let 状态 = 生成器.检测证书状态()
+        if case .文件缺失 = 状态 {
+            do {
+                try 生成器.生成CA证书()
+            } catch {
+                print("[MITM] CA 证书生成失败：\(error.localizedDescription)")
+            }
+        }
+        // 更新 PEM 缓存
+        CA证书PEM = 生成器.获取证书PEM() ?? ""
+    }
+
+    /// 刷新证书状态
+    func 刷新证书状态() {
+        let 生成器 = CACertificate生成器.共享
+        证书状态 = 生成器.检测证书状态()
+        CA证书PEM = 生成器.获取证书PEM() ?? ""
+    }
+
+    /// 重新生成 CA 证书
+    func 重新生成证书() throws {
+        let 生成器 = CACertificate生成器.共享
+        try 生成器.生成CA证书()
+        刷新证书状态()
+    }
+
+    /// 获取 P12 Base64（供内核配置使用）
+    func 获取P12Base64() -> String? {
+        CACertificate生成器.共享.获取P12Base64()
+    }
+
+    /// 导出 mobileconfig 文件
+    func 导出MobileConfig() throws -> URL {
+        try CACertificate生成器.共享.生成MobileConfig()
     }
 
     private func 保存配置() {
@@ -332,6 +320,10 @@ FxBzaz833X+KGgOv4VBtDcY=
             共享.set(TLS指纹.rawValue, forKey: 键前缀 + "tls_fingerprint")
             共享.set(CA证书PEM, forKey: 键前缀 + "ca_cert")
             共享.set(CA私钥PEM, forKey: 键前缀 + "ca_key")
+            // 保存 P12 Base64 供内核使用
+            if let p12Base64 = 获取P12Base64() {
+                共享.set(p12Base64, forKey: 键前缀 + "p12_base64")
+            }
             共享.synchronize()
         }
     }

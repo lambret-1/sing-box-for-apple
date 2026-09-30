@@ -239,7 +239,11 @@ public class ExtensionProfile: ObservableObject {
             ])
         }
 
-        let configContent = try await profile.readAsync()
+        var configContent = try await profile.readAsync()
+
+        // 注入 MITM 配置（如已启用）
+        configContent = Self.注入MITM配置(到: configContent)
+
         options["configContent"] = NSString(string: configContent)
 
         #if os(macOS)
@@ -338,5 +342,64 @@ public class ExtensionProfile: ObservableObject {
         manager.protocolConfiguration = tunnelProtocol
         manager.isEnabled = true
         try await manager.saveToPreferences()
+    }
+
+    // MARK: - MITM 配置注入
+
+    /// 向配置 JSON 中注入 MITM 配置字段
+    /// - Parameter config: 原始配置 JSON 字符串
+    /// - Returns: 注入 MITM 后的配置 JSON 字符串
+    static func 注入MITM配置(到 config: String) -> String {
+        // 读取 MITM 开关状态（从 App Group UserDefaults）
+        guard let 共享默认 = UserDefaults(suiteName: "group.com.singbox.lg") else {
+            return config
+        }
+
+        let mitmEnabled = 共享默认.bool(forKey: "mitm_enabled")
+        guard mitmEnabled else {
+            return config
+        }
+
+        // 解析配置 JSON
+        guard let 配置数据 = config.data(using: .utf8),
+              var 配置字典 = try? JSONSerialization.jsonObject(with: 配置数据) as? [String: Any] else {
+            logger.error("MITM 配置注入失败：无法解析配置 JSON")
+            return config
+        }
+
+        // 读取 MITM 设置
+        let http2Enabled = 共享默认.bool(forKey: "mitm_http2_enabled")
+        let p12Base64 = 共享默认.string(forKey: "mitm_p12_base64") ?? ""
+
+        // 构建 MITM 配置
+        var mitmConfig: [String: Any] = [
+            "enabled": true,
+            "http2_enabled": http2Enabled,
+            "print": 共享默认.bool(forKey: "mitm_capture_enabled")
+        ]
+
+        // TLS 解密配置
+        var tlsDecryption: [String: Any] = [
+            "enabled": true,
+            "key_password": ""
+        ]
+
+        if !p12Base64.isEmpty {
+            tlsDecryption["key_pair_p12"] = p12Base64
+        }
+
+        mitmConfig["tls_decryption"] = tlsDecryption
+
+        // 注入到配置顶层
+        配置字典["mitm"] = mitmConfig
+
+        // 序列化回 JSON
+        do {
+            let 新数据 = try JSONSerialization.data(withJSONObject: 配置字典, options: [.sortedKeys, .prettyPrinted])
+            return String(data: 新数据, encoding: .utf8) ?? config
+        } catch {
+            logger.error("MITM 配置注入失败：序列化错误 \(error.localizedDescription)")
+            return config
+        }
     }
 }

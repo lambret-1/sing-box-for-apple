@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 // MARK: - 页面主体
 
@@ -22,6 +23,14 @@ struct MITM设置页面: View {
     @State private var 新排除域名 = ""
     /// 新排除备注
     @State private var 新排除备注 = ""
+    /// 是否显示文档导出器
+    @State private var 显示文档导出 = false
+    /// 是否显示安装引导
+    @State private var 显示安装引导 = false
+    /// 待导出的文件 URL
+    @State private var 待导出文件: URL?
+    /// 是否显示重新生成确认
+    @State private var 显示重新生成确认 = false
 
     var body: some View {
         List {
@@ -88,14 +97,14 @@ struct MITM设置页面: View {
 
             // MARK: 证书操作
             Section("证书操作") {
-                证书操作行(图标: "square.and.arrow.up", 标题: "导出证书", 说明: "导出 .cer 文件用于手动安装") {
-                    提示 = "证书导出将在隧道启动后通过 Clash API 获取"
+                证书操作行(图标: "square.and.arrow.up", 标题: "导出证书", 说明: "导出 .mobileconfig 描述文件供安装") {
+                    导出证书()
                 }
-                证书操作行(图标: "graduationcap", 标题: "安装引导", 说明: "跳转系统设置完成证书信任") {
-                    提示 = "请在 Safari 中打开证书描述文件进行安装"
+                证书操作行(图标: "graduationcap", 标题: "安装引导", 说明: "三步引导完成证书安装与信任") {
+                    显示安装引导 = true
                 }
                 证书操作行(图标: "arrow.triangle.2.circlepath", 标题: "重新生成", 说明: "生成新的 CA 证书（旧证书将失效）") {
-                    提示 = "证书将重新生成，已安装的旧证书需删除"
+                    显示重新生成确认 = true
                 }
             }
 
@@ -183,6 +192,22 @@ struct MITM设置页面: View {
         .sheet(isPresented: $显示证书详情) {
             证书详情页面()
         }
+        .sheet(isPresented: $显示文档导出) {
+            if let 文件 = 待导出文件 {
+               文档导出器(url: 文件)
+            }
+        }
+        .sheet(isPresented: $显示安装引导) {
+            证书安装引导页面()
+        }
+        .confirmationDialog("重新生成证书", isPresented: $显示重新生成确认, titleVisibility: .visible) {
+            Button("重新生成", role: .destructive) {
+                重新生成证书()
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("重新生成后，旧证书将失效，需要重新安装描述文件。确定继续吗？")
+        }
     }
 
     // MARK: - 计算属性
@@ -241,6 +266,27 @@ struct MITM设置页面: View {
     }
 
     // MARK: - 方法
+
+    /// 导出证书（生成 mobileconfig 并弹出文档导出器）
+    private func 导出证书() {
+        do {
+            let 文件 = try mitm.导出MobileConfig()
+            待导出文件 = 文件
+            显示文档导出 = true
+        } catch {
+            提示 = "证书导出失败：\(error.localizedDescription)"
+        }
+    }
+
+    /// 重新生成证书
+    private func 重新生成证书() {
+        do {
+            try mitm.重新生成证书()
+            提示 = "证书已重新生成，请重新安装描述文件"
+        } catch {
+            提示 = "证书生成失败：\(error.localizedDescription)"
+        }
+    }
 
     private func 添加域名排除() {
         let 域名 = 新排除域名.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -359,6 +405,188 @@ struct 证书详情页面: View {
             Text(值)
                 .font(字体层级.正文)
                 .foregroundColor(.primary)
+        }
+    }
+}
+
+// MARK: - 文档导出器（UIDocumentPickerViewController 封装）
+
+/// 文档导出器：将文件导出到"文件"App 或分享菜单
+struct 文档导出器: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
+        let picker = UIDocumentPickerViewController(forExporting: [url], asCopy: true)
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
+}
+
+// MARK: - 证书安装引导页面
+
+/// 证书安装三步引导
+struct 证书安装引导页面: View {
+    @Environment(\.dismiss) private var 关闭
+    @ObservedObject var mitm = MITM状态.共享
+    @State private var 当前步骤 = 1
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                // 步骤指示器
+                步骤指示器
+                    .padding()
+
+                // 步骤内容
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 间距常量.大) {
+                        switch 当前步骤 {
+                        case 1:
+                            步骤一内容
+                        case 2:
+                            步骤二内容
+                        case 3:
+                            步骤三内容
+                        default:
+                            EmptyView()
+                        }
+                    }
+                    .padding()
+                }
+
+                // 底部按钮
+                底部按钮
+                    .padding()
+            }
+            .navigationTitle("证书安装引导")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("关闭") { 关闭() }
+                }
+            }
+        }
+    }
+
+    // MARK: 步骤指示器
+
+    private var 步骤指示器: some View {
+        HStack(spacing: 间距常量.中等) {
+            ForEach(1...3, id: \.self) { 步骤 in
+                Circle()
+                    .fill(步骤 <= 当前步骤 ? Color.主题色 : Color.次要文字.opacity(0.3))
+                    .frame(width: 12, height: 12)
+                if 步骤 < 3 {
+                    Rectangle()
+                        .fill(步骤 < 当前步骤 ? Color.主题色 : Color.次要文字.opacity(0.3))
+                        .frame(height: 2)
+                }
+            }
+        }
+    }
+
+    // MARK: 步骤内容
+
+    private var 步骤一内容: some View {
+        VStack(alignment: .leading, spacing: 间距常量.中等) {
+            Text("第一步：安装描述文件")
+                .font(字体层级.标题)
+
+            Text("""
+            1. 点击下方"导出证书"按钮
+            2. 在弹出的分享菜单中选择"保存到文件"或"更多"
+            3. 选择保存位置（如"我的 iPhone"）
+            4. 打开 iOS"设置"App
+            5. 点击顶部"已下载描述文件"
+            6. 点击右上角"安装"，输入密码确认
+            """)
+            .font(字体层级.正文)
+            .foregroundColor(.次要文字)
+            .lineSpacing(4)
+        }
+    }
+
+    private var 步骤二内容: some View {
+        VStack(alignment: .leading, spacing: 间距常量.中等) {
+            Text("第二步：启用完全信任")
+                .font(字体层级.标题)
+
+            Text("""
+            1. 打开 iOS"设置"App
+            2. 进入"通用" → "关于本机"
+            3. 滚动到底部，点击"证书信任设置"
+            4. 找到"sing-box MITM CA"
+            5. 开启右侧开关
+            6. 在弹窗中点击"继续"
+            """)
+            .font(字体层级.正文)
+            .foregroundColor(.次要文字)
+            .lineSpacing(4)
+        }
+    }
+
+    private var 步骤三内容: some View {
+        VStack(alignment: .leading, spacing: 间距常量.中等) {
+            Text("第三步：完成")
+                .font(字体层级.标题)
+
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 60))
+                .foregroundColor(.成功色)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding()
+
+            Text("""
+            证书已安装并信任完成。
+
+            现在可以返回 MITM 设置页面，开启 MITM 总开关开始抓包。
+
+            首次使用时，建议先开启"抓包日志"，然后访问几个 HTTPS 网站验证抓包功能是否正常。
+            """)
+            .font(字体层级.正文)
+            .foregroundColor(.次要文字)
+            .lineSpacing(4)
+        }
+    }
+
+    // MARK: 底部按钮
+
+    private var 底部按钮: some View {
+        VStack(spacing: 间距常量.中等) {
+            if 当前步骤 < 3 {
+                Button {
+                    withAnimation { 当前步骤 += 1 }
+                } label: {
+                    Text("下一步")
+                        .font(字体层级.按钮)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.主题色)
+                        .cornerRadius(圆角常量.标准)
+                }
+
+                Button("上一步") {
+                    withAnimation { 当前步骤 -= 1 }
+                }
+                .font(字体层级.辅助说明)
+                .foregroundColor(.次要文字)
+                .opacity(当前步骤 > 1 ? 1 : 0)
+            } else {
+                Button {
+                    mitm.刷新证书状态()
+                    关闭()
+                } label: {
+                    Text("完成")
+                        .font(字体层级.按钮)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.主题色)
+                        .cornerRadius(圆角常量.标准)
+                }
+            }
         }
     }
 }
