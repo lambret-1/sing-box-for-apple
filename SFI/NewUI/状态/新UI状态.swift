@@ -175,9 +175,6 @@ final class 新UI状态: ObservableObject {
     /// 当前底部弹窗（nil 表示无弹窗）
     @Published var 当前底部弹窗: 底部弹窗类型?
 
-    /// 是否显示运行模式选择面板
-    @Published var 显示运行模式面板: Bool = false
-
     /// 是否正在执行连接/断开操作
     @Published var 操作中: Bool = false
 
