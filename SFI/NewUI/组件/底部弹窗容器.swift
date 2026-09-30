@@ -270,15 +270,18 @@ extension View {
 
 // MARK: - 运行模式面板修饰符
 
-/// 运行模式选择面板修饰符（骨架阶段占位）
+/// 运行模式选择面板修饰符
 private struct 运行模式面板修饰符: ViewModifier {
     /// 是否显示
     @Binding var 显示: Bool
+    /// 官方命令客户端（显式注入到 sheet，避免环境对象丢失导致崩溃）
+    @EnvironmentObject private var 命令客户端: CommandClient
 
     func body(content: Content) -> some View {
         content
             .sheet(isPresented: $显示) {
                 运行模式面板内容()
+                    .environmentObject(命令客户端)
                     .presentationDetents([.medium])
                     .presentationDragIndicator(.visible)
             }
