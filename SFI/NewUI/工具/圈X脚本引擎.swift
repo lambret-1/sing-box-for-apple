@@ -139,7 +139,7 @@ final class 圈X脚本引擎 {
 
         let done: @convention(block) (JSValue?) -> Void = { 参数 in
             guard let 参数 = 参数, 参数.isObject else { 已完成 = true; return }
-            if let resp = 参数.toObjectOfClass(圈X响应.self) as? 圈X响应 {
+            if let resp = 参数.toObjectOf(圈X响应.self) as? 圈X响应 {
                 完成响应 = resp
             }
             已完成 = true
