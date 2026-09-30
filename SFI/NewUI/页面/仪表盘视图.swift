@@ -57,6 +57,7 @@ struct 仪表盘视图: View {
             // 底部固定工具栏
             底部工具栏()
         }
+        .environmentObject(环境.commandClient)
         .background(Color.页面背景.ignoresSafeArea())
         .底部弹窗(弹窗类型: $状态.当前底部弹窗)
         .运行模式面板(显示: $状态.显示运行模式面板)

@@ -285,20 +285,137 @@ private struct 运行模式面板修饰符: ViewModifier {
     }
 }
 
-/// 运行模式面板内容（占位）
+/// 运行模式面板内容（接入官方 Clash 模式数据）
 private struct 运行模式面板内容: View {
+    /// 官方命令客户端
+    @EnvironmentObject private var 命令客户端: CommandClient
+    /// 关闭环境
+    @Environment(\.dismiss) private var 关闭
+    /// 当前选中模式（本地状态，点击时更新）
+    @State private var 当前模式: String = ""
+    /// 切换中状态
+    @State private var 切换中: Bool = false
+
+    /// 模式中英文映射
+    private func 模式中文名(_ 模式: String) -> String {
+        switch 模式 {
+        case "rule": return "规则模式"
+        case "global": return "全局模式"
+        case "direct": return "直连模式"
+        default: return 模式
+        }
+    }
+
+    /// 模式说明
+    private func 模式说明(_ 模式: String) -> String {
+        switch 模式 {
+        case "rule": return "按分流规则路由流量"
+        case "global": return "全部流量走代理节点"
+        case "direct": return "全部流量直连，不经过代理"
+        default: return ""
+        }
+    }
+
+    /// 模式图标
+    private func 模式图标(_ 模式: String) -> String {
+        switch 模式 {
+        case "rule": return "list.bullet.rectangle"
+        case "global": return "globe"
+        case "direct": return "arrow.uturn.forward"
+        default: return "circle"
+        }
+    }
+
     var body: some View {
         NavigationStack {
             List {
                 Section("运行模式") {
-                    占位行(图标: "network", 标题: "规则模式", 说明: "按分流规则路由")
-                    占位行(图标: "globe", 标题: "全局模式", 说明: "全部流量走代理")
-                    占位行(图标: "arrow.uturn.forward", 标题: "直连模式", 说明: "不经过代理")
+                    ForEach(命令客户端.clashModeList, id: \.self) { 模式 in
+                        Button {
+                            切换模式(模式)
+                        } label: {
+                            HStack(spacing: 12) {
+                                // 图标
+                                Image(systemName: 模式图标(模式))
+                                    .font(.system(size: 18))
+                                    .foregroundColor(当前模式 == 模式 ? .主题色 : .次要文字)
+                                    .frame(width: 32)
+
+                                // 标题和说明
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(模式中文名(模式))
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundColor(.primary)
+                                    Text(模式说明(模式))
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.次要文字)
+                                }
+
+                                Spacer()
+
+                                // 选中标记
+                                if 当前模式 == 模式 {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(.主题色)
+                                        .font(.system(size: 20))
+                                }
+
+                                // 切换中指示器
+                                if 切换中 && 当前模式 == 模式 {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle())
+                                }
+                            }
+                            .padding(.vertical, 4)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .disabled(切换中)
+                    }
+                }
+
+                Section {
+                    Text("当前模式：\(模式中文名(当前模式))")
+                        .font(.system(size: 13))
+                        .foregroundColor(.次要文字)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .listRowBackground(Color.clear)
                 }
             }
             .listStyle(.insetGrouped)
             .navigationTitle("运行模式")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("完成") {
+                        关闭()
+                    }
+                }
+            }
+        }
+        .onAppear {
+            当前模式 = 命令客户端.clashMode
+        }
+        .onChange(of: 命令客户端.clashMode) { 新值 in
+            当前模式 = 新值
+            切换中 = false
+        }
+    }
+
+    /// 切换模式
+    private func 切换模式(_ 模式: String) {
+        guard 模式 != 当前模式 else { return }
+        切换中 = true
+        当前模式 = 模式
+        Task {
+            do {
+                try CommandTarget.standaloneClient().setClashMode(模式)
+            } catch {
+                await MainActor.run {
+                    切换中 = false
+                    // 恢复原模式
+                    当前模式 = 命令客户端.clashMode
+                }
+            }
         }
     }
 }
