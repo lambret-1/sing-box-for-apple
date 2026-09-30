@@ -81,7 +81,7 @@ jobs:
           git clone --depth 1 --branch testing https://github.com/SagerNet/sing-box.git sing-box-src
           cd sing-box-src
           # 注入 with_gvisor 标签：build_libbox 硬编码 tags 列表，忽略 GOFLAGS，需直接修改源码
-          sed -i 's/darwinTags = append(darwinTags, "with_dhcp", "grpcnotrace")/darwinTags = append(darwinTags, "with_dhcp", "grpcnotrace", "with_gvisor")/' cmd/internal/build_libbox/main.go
+          sed -i '' 's/darwinTags = append(darwinTags, "with_dhcp", "grpcnotrace")/darwinTags = append(darwinTags, "with_dhcp", "grpcnotrace", "with_gvisor")/' cmd/internal/build_libbox/main.go
           echo "已注入 with_gvisor 标签："
           grep "darwinTags = append" cmd/internal/build_libbox/main.go
           export PATH=$PATH:$(go env GOPATH)/bin
