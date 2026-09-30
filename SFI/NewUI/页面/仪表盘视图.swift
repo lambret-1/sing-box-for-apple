@@ -21,6 +21,8 @@ struct 仪表盘视图: View {
     @EnvironmentObject private var 环境: ExtensionEnvironments
     /// 是否显示 VLESS 转换器全屏页
     @State private var 显示VLESS转换器 = false
+    /// 是否显示规则集管理全屏页
+    @State private var 显示规则集管理 = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -72,6 +74,9 @@ struct 仪表盘视图: View {
         .fullScreenCover(isPresented: $显示VLESS转换器) {
             VLESS转换器页面()
         }
+        .fullScreenCover(isPresented: $显示规则集管理) {
+            规则集管理页面()
+        }
         .onAppear {
             // 加载配置列表
             Task { await 状态.加载配置列表() }
@@ -82,7 +87,7 @@ struct 仪表盘视图: View {
 // MARK: - 工具入口条
 
 extension 仪表盘视图 {
-    /// 工具入口条：一排小工具按钮，目前包含 VLESS 转换器
+    /// 工具入口条：一排小工具按钮
     var 工具入口条: some View {
         HStack(spacing: 间距常量.紧凑) {
             工具入口按钮(
@@ -91,6 +96,13 @@ extension 仪表盘视图 {
                 副标题: "链接转 JSON"
             ) {
                 显示VLESS转换器 = true
+            }
+            工具入口按钮(
+                图标: "list.bullet.rectangle",
+                标题: "规则集",
+                副标题: "geoip/geosite"
+            ) {
+                显示规则集管理 = true
             }
             Spacer()
         }
