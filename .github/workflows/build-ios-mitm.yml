@@ -1,0 +1,206 @@
+name: 从源码构建SFI iOS MITM IPA
+
+on:
+  push:
+    branches: [ feature/mitm ]
+  workflow_dispatch:
+
+env:
+  DEVELOPER_DIR: ""
+
+jobs:
+  build-ios:
+    runs-on: macos-15
+    timeout-minutes: 60
+
+    steps:
+      - name: 检出代码（含子模块）
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: 配置 Xcode 版本
+        run: |
+          xcodebuild -version
+          echo "Xcode 路径: $(xcode-select -p)"
+
+      - name: 缓存 Libbox.xcframework（MITM版）
+        id: cache-libbox
+        uses: actions/cache@v4
+        with:
+          path: Libbox.xcframework
+          key: libbox-volitios-mitm-gvisor-v1
+
+      - name: 安装 Go 环境（仅缓存未命中时）
+        if: steps.cache-libbox.outputs.cache-hit != 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: 安装 gomobile 工具（仅缓存未命中时）
+        if: steps.cache-libbox.outputs.cache-hit != 'true'
+        run: |
+          echo "安装 gomobile..."
+          go install github.com/sagernet/gomobile/cmd/gomobile@latest
+          export PATH=$PATH:$(go env GOPATH)/bin
+          gomobile init
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+
+      - name: 从源码编译 Libbox.xcframework（仅缓存未命中时）
+        if: steps.cache-libbox.outputs.cache-hit != 'true'
+        run: |
+          echo "缓存未命中，编译 Libbox.xcframework..."
+          # 使用 SagerNet/sing-box testing 分支（稳定版内核，MITM UI 已内置）
+          git clone --depth 1 --branch testing https://github.com/SagerNet/sing-box.git sing-box-src
+          cd sing-box-src
+          # 注入 with_gvisor 标签
+          sed -i '' 's/darwinTags = append(darwinTags, "with_dhcp", "grpcnotrace")/darwinTags = append(darwinTags, "with_dhcp", "grpcnotrace", "with_gvisor")/' cmd/internal/build_libbox/main.go
+          echo "已注入 with_gvisor 标签："
+          grep "darwinTags = append" cmd/internal/build_libbox/main.go
+          export PATH=$PATH:$(go env GOPATH)/bin
+          go run ./cmd/internal/build_libbox -target apple
+          LIBBOX_PATH=$(find . -name "Libbox.xcframework" -type d | head -1)
+          if [ -z "$LIBBOX_PATH" ]; then
+            echo "编译失败：未找到 Libbox.xcframework"
+            exit 1
+          fi
+          cp -R "$LIBBOX_PATH" ../
+          cd ..
+          echo "Libbox.xcframework 编译完成"
+
+      - name: 保存 Libbox 缓存（编译成功后立即保存）
+        if: steps.cache-libbox.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: Libbox.xcframework
+          key: libbox-volitios-mitm-gvisor-v1
+
+      - name: 使用缓存的 Libbox.xcframework
+        if: steps.cache-libbox.outputs.cache-hit == 'true'
+        run: |
+          echo "使用缓存的 MITM 版 Libbox.xcframework"
+          ls -la Libbox.xcframework/
+
+      - name: 安装构建工具
+        run: |
+          brew install xcbeautify || echo "xcbeautify 安装失败"
+          which xcbeautify || true
+
+      - name: 解析 Swift Package 依赖
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project sing-box.xcodeproj \
+            -scheme SFI \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/DerivedData \
+            -skipPackagePluginValidation 2>&1 | tail -20
+          echo "SPM 依赖解析完成"
+
+      - name: 补丁libghostty-spm
+        run: |
+          DERIVED_DIR="build/DerivedData"
+          TARGET_FILES=$(find "$DERIVED_DIR" -name "*.swift" -exec grep -l "UIGlassEffect" {} \; 2>/dev/null || true)
+          FILE_COUNT=$(echo "$TARGET_FILES" | grep -c . || echo 0)
+          echo "找到 UIGlassEffect 文件数: $FILE_COUNT"
+          if [ "$FILE_COUNT" -gt 0 ]; then
+            echo "$TARGET_FILES" | while read -r file; do
+              if [ -n "$file" ] && [ -f "$file" ]; then
+                sed -i '' 's/UIGlassEffect/UIBlurEffect/g' "$file"
+                sed -i '' '/effect.isInteractive/d' "$file"
+                sed -i '' 's/\.isInteractive = true//g' "$file"
+              fi
+            done
+          fi
+
+      - name: 构建 iOS 应用（未签名）
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project sing-box.xcodeproj \
+            -scheme SFI \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/DerivedData \
+            -disableAutomaticPackageResolution \
+            -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            EXPANDED_CODE_SIGN_IDENTITY="" \
+            EXPANDED_CODE_SIGN_IDENTITY_NAME="" \
+            2>&1 | tee build.log | {
+              if command -v xcbeautify &> /dev/null; then
+                xcbeautify --quiet
+              else
+                tail -100
+              fi
+            }
+          BUILD_EXIT=${PIPESTATUS[0]}
+          if [ $BUILD_EXIT -ne 0 ]; then
+            echo "构建失败，显示错误日志:"
+            grep -i "error:" build.log | head -30
+            exit $BUILD_EXIT
+          fi
+          echo "构建成功"
+
+      - name: 查找构建产物
+        run: |
+          APP_PATH=$(find build/DerivedData -name "*.app" -type d | grep -i "sing-box" | head -1)
+          if [ -z "$APP_PATH" ]; then
+            echo "未找到 sing-box.app"
+            find build/DerivedData -name "*.app" -type d | head -10
+            exit 1
+          fi
+          echo "找到应用: $APP_PATH"
+          echo "APP_PATH=$APP_PATH" >> $GITHUB_ENV
+
+      - name: 安装ldid伪签名工具
+        run: |
+          brew install ldid 2>&1 | tail -5 || echo "brew安装ldid失败"
+          which ldid && ldid -v || true
+
+      - name: 打包未签名IPA（嵌入entitlements）
+        run: |
+          rm -rf Payload
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          APP_NAME=$(basename "$APP_PATH")
+          if [ "$APP_NAME" != "SFI.app" ]; then
+            mv "Payload/$APP_NAME" "Payload/SFI.app"
+          fi
+          find Payload -name "_CodeSignature" -type d -exec rm -rf {} + 2>/dev/null || true
+          find Payload -name "embedded.mobileprovision" -delete 2>/dev/null || true
+
+          mkdir -p /tmp/entitlements
+          APP_GROUP="group.com.singbox.lg"
+          BUNDLE_ID="com.singbox.lg"
+          sed -e "s/\$(APP_GROUP_IDENTIFIER)/$APP_GROUP/g" \
+              -e "s/\$(BASE_PACKAGE_IDENTIFIER)/$BUNDLE_ID/g" \
+              SFI/SFI.entitlements > /tmp/entitlements/SFI.entitlements
+          sed -e "s/\$(APP_GROUP_IDENTIFIER)/$APP_GROUP/g" \
+              -e "s/\$(BASE_PACKAGE_IDENTIFIER)/$BUNDLE_ID/g" \
+              Extension/Extension.entitlements > /tmp/entitlements/Extension.entitlements
+
+          ldid -S/tmp/entitlements/SFI.entitlements Payload/SFI.app/sing-box 2>&1 || echo "主应用签名失败"
+          ldid -S/tmp/entitlements/Extension.entitlements Payload/SFI.app/PlugIns/Extension.appex/Extension 2>&1 || echo "扩展签名失败"
+
+          IPA_NAME="App-unsigned.ipa"
+          zip -qr "$IPA_NAME" Payload
+          ls -lh "$IPA_NAME"
+          echo "IPA_NAME=$IPA_NAME" >> $GITHUB_ENV
+
+      - name: 上传 IPA 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: App-unsigned-ipa
+          path: App-unsigned.ipa
+          retention-days: 30
+
+      - name: 上传构建日志（失败时）
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          retention-days: 7
