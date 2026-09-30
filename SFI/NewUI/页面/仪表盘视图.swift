@@ -10,11 +10,15 @@
 import SwiftUI
 import Combine
 import Libbox
+import ApplicationLibrary
+import Library
 
 /// 仪表盘主页面视图
 struct 仪表盘视图: View {
     /// 新UI全局状态
     @EnvironmentObject private var 状态: 新UI状态
+    /// 官方扩展环境（供 ProfileCard 使用）
+    @EnvironmentObject private var 环境: ExtensionEnvironments
 
     var body: some View {
         VStack(spacing: 0) {
@@ -29,10 +33,21 @@ struct 仪表盘视图: View {
             // 内容区：占满剩余高度，外包 ScrollView
             ScrollView {
                 VStack(spacing: 间距常量.中等) {
+                    // 官方配置卡片（当前配置 + 编辑/更新/导出 + 添加）
+                    ProfileCard(
+                        profileList: $状态.配置列表,
+                        selectedProfileID: $状态.当前选中配置
+                    )
+                    .environmentObject(环境)
+
                     主内容区()
                         .padding(.bottom, 间距常量.标准)
                 }
                 .padding(.horizontal, 间距常量.标准)
+            }
+            .onAppear {
+                // 加载配置列表
+                Task { await 状态.加载配置列表() }
             }
 
             // 底部固定工具栏
