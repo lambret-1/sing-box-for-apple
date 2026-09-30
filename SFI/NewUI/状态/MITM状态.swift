@@ -186,7 +186,7 @@ struct 抓包记录: Identifiable, Codable, Equatable {
     var 匹配脚本: String?
 
     var 域名: String {
-        guard let url = URL(string: URL) else { return "" }
+        guard let url = Foundation.URL(string: URL) else { return "" }
         return url.host ?? ""
     }
 
