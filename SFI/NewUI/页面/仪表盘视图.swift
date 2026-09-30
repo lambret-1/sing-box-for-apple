@@ -33,12 +33,14 @@ struct 仪表盘视图: View {
             // 内容区：占满剩余高度，外包 ScrollView
             ScrollView {
                 VStack(spacing: 间距常量.中等) {
-                    // 官方配置卡片（当前配置 + 编辑/更新/导出 + 添加）
-                    ProfileCard(
-                        profileList: $状态.配置列表,
-                        selectedProfileID: $状态.当前选中配置
-                    )
-                    .environmentObject(环境)
+                    // 官方配置卡片（日志页不显示，避免占用日志输出空间）
+                    if 状态.当前选中内容区 != .规则与日志 {
+                        ProfileCard(
+                            profileList: $状态.配置列表,
+                            selectedProfileID: $状态.当前选中配置
+                        )
+                        .environmentObject(环境)
+                    }
 
                     主内容区()
                         .padding(.bottom, 间距常量.标准)
