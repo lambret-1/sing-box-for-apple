@@ -436,9 +436,9 @@ final class CACertificate生成器 {
             return .文件损坏
         }
 
-        // 检查有效期
-        var 错误: Unmanaged<CFError>?
-        guard let 过期日期 = SecCertificateCopyExpiryDate(证书) as Date? else {
+        // 检查有效期（iOS 兼容：从 DER 数据解析 notAfter）
+        let 证书DER = SecCertificateCopyData(证书) as Data
+        guard let 过期日期 = CACertificate生成器.解析证书过期日期(from: 证书DER) else {
             return .文件损坏
         }
 
@@ -544,6 +544,108 @@ final class CACertificate生成器 {
         try mobileconfig.write(to: mobileconfigURL, atomically: true, encoding: .utf8)
 
         return mobileconfigURL
+    }
+
+    // MARK: - 证书有效期解析（iOS 兼容 ASN.1 轻量解析）
+
+    /// 从 DER 格式证书数据中解析 notAfter（过期日期）
+    /// - Parameter der数据: SecCertificateCopyData 返回的 DER 数据
+    /// - Returns: 过期日期，解析失败返回 nil
+    static func 解析证书过期日期(from der数据: Data) -> Date? {
+        var 索引 = 0
+
+        // 顶层 Certificate SEQUENCE (tag 0x30)
+        guard 读取ASN1标签(der数据, at: &索引) == 0x30 else { return nil }
+        let _ = 读取ASN1长度(der数据, at: &索引)
+
+        // tbsCertificate SEQUENCE (tag 0x30)
+        guard 读取ASN1标签(der数据, at: &索引) == 0x30 else { return nil }
+        let _ = 读取ASN1长度(der数据, at: &索引)
+
+        // 跳过 version [0] EXPLICIT（tag 0xA0，可选）
+        if 索引 < der数据.count && der数据[索引] == 0xA0 {
+            guard 跳过ASN1元素(der数据, at: &索引) else { return nil }
+        }
+
+        // 跳过 serialNumber INTEGER (tag 0x02)
+        guard 跳过ASN1元素(der数据, at: &索引) else { return nil }
+        // 跳过 signature AlgorithmIdentifier SEQUENCE (tag 0x30)
+        guard 跳过ASN1元素(der数据, at: &索引) else { return nil }
+        // 跳过 issuer Name SEQUENCE (tag 0x30)
+        guard 跳过ASN1元素(der数据, at: &索引) else { return nil }
+
+        // validity SEQUENCE (tag 0x30)
+        guard 读取ASN1标签(der数据, at: &索引) == 0x30 else { return nil }
+        let _ = 读取ASN1长度(der数据, at: &索引)
+
+        // 跳过 notBefore
+        guard 跳过ASN1元素(der数据, at: &索引) else { return nil }
+
+        // 读取 notAfter：UTCTime (tag 0x17) 或 GeneralizedTime (tag 0x18)
+        let 时间标签 = 读取ASN1标签(der数据, at: &索引)
+        guard 时间标签 == 0x17 || 时间标签 == 0x18 else { return nil }
+        let 时间长度 = 读取ASN1长度(der数据, at: &索引)
+        guard 索引 + 时间长度 <= der数据.count else { return nil }
+        let 时间数据 = der数据.subdata(in: 索引..<索引 + 时间长度)
+        guard let 时间字符串 = String(data: 时间数据, encoding: .ascii) else { return nil }
+
+        return 解析ASN1时间字符串(时间字符串, 标签: 时间标签)
+    }
+
+    /// 读取 ASN.1 标签字节
+    private static func 读取ASN1标签(_ 数据: Data, at 索引: inout Int) -> UInt8? {
+        guard 索引 < 数据.count else { return nil }
+        let 标签 = 数据[索引]
+        索引 += 1
+        return 标签
+    }
+
+    /// 读取 ASN.1 长度（支持短格式和长格式）
+    private static func 读取ASN1长度(_ 数据: Data, at 索引: inout Int) -> Int {
+        guard 索引 < 数据.count else { return 0 }
+        let 首字节 = 数据[索引]
+        索引 += 1
+        if 首字节 & 0x80 == 0 {
+            return Int(首字节)
+        }
+        let 后续字节数 = Int(首字节 & 0x7F)
+        guard 后续字节数 > 0, 索引 + 后续字节数 <= 数据.count else { return 0 }
+        var 长度 = 0
+        for i in 0..<后续字节数 {
+            长度 = (长度 << 8) | Int(数据[索引 + i])
+        }
+        索引 += 后续字节数
+        return 长度
+    }
+
+    /// 跳过一个完整的 ASN.1 元素（标签 + 长度 + 值）
+    @discardableResult
+    private static func 跳过ASN1元素(_ 数据: Data, at 索引: inout Int) -> Bool {
+        guard 读取ASN1标签(数据, at: &索引) != nil else { return false }
+        let 长度 = 读取ASN1长度(数据, at: &索引)
+        guard 索引 + 长度 <= 数据.count else { return false }
+        索引 += 长度
+        return true
+    }
+
+    /// 解析 ASN.1 时间字符串为 Date
+    /// - Parameters:
+    ///   - 字符串: UTCTime（YYMMDDHHMMSSZ）或 GeneralizedTime（YYYYMMDDHHMMSSZ）
+    ///   - 标签: 0x17 = UTCTime, 0x18 = GeneralizedTime
+    private static func 解析ASN1时间字符串(_ 字符串: String, 标签: UInt8) -> Date? {
+        let 格式化器 = DateFormatter()
+        格式化器.timeZone = TimeZone(abbreviation: "UTC")
+        格式化器.locale = Locale(identifier: "en_US_POSIX")
+        if 标签 == 0x17 {
+            // UTCTime: YYMMDDHHMMSSZ（两位年份，>=50 视为 19xx，<50 视为 20xx）
+            格式化器.dateFormat = "yyMMddHHmmss'Z'"
+        } else {
+            // GeneralizedTime: YYYYMMDDHHMMSSZ
+            格式化器.dateFormat = "yyyyMMddHHmmss'Z'"
+        }
+        // 去除可能的毫秒部分和非 Z 后缀
+        let 清理后 = 字符串.hasSuffix("Z") ? 字符串 : 字符串 + "Z"
+        return 格式化器.date(from: 清理后)
     }
 }
 
