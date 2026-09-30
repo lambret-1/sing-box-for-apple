@@ -9,6 +9,7 @@
 
 import SwiftUI
 import Combine
+import Libbox
 
 /// 仪表盘主页面视图
 struct 仪表盘视图: View {
@@ -46,17 +47,20 @@ struct 仪表盘视图: View {
 
 // MARK: - 顶部状态区
 
-/// 顶部状态区：左侧 VPN 状态文字 + 连接时长，右侧电源开关
+/// 顶部状态区：左侧 VPN 状态文字 + 连接时长 + 实时流量，右侧电源开关
 private struct 顶部状态区: View {
     /// 新UI全局状态
     @EnvironmentObject private var 状态: 新UI状态
 
-    /// 每秒节拍：驱动连接时长刷新
+    /// 每秒节拍：驱动连接时长与流量刷新
     private let 计时器 = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+    /// 实时流量快照（每秒从 CommandClient 读取）
+    @State private var 流量: LibboxStatusMessage?
 
     var body: some View {
         HStack(alignment: .top) {
-            // 左侧：状态文字 + 连接时长
+            // 左侧：状态文字 + 连接时长 + 实时流量
             VStack(alignment: .leading, spacing: 间距常量.紧凑) {
                 Text(状态.当前VPN状态.显示文字)
                     .font(字体层级.大标题)
@@ -70,6 +74,32 @@ private struct 顶部状态区: View {
                         .font(字体层级.辅助说明)
                         .foregroundColor(状态.是否已连接 ? .次要文字 : .clear)
                         .monospacedDigit()
+                }
+
+                // 实时上下行流量速率（仅已连接时显示）
+                if 状态.是否已连接, let 流量 {
+                    HStack(spacing: 间距常量.中等) {
+                        // 下行
+                        HStack(spacing: 3) {
+                            Image(systemName: "arrow.down")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundColor(.成功色)
+                            Text(LibboxFormatBytes(流量.downlink) + "/s")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.次要文字)
+                                .monospacedDigit()
+                        }
+                        // 上行
+                        HStack(spacing: 3) {
+                            Image(systemName: "arrow.up")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundColor(.主题色)
+                            Text(LibboxFormatBytes(流量.uplink) + "/s")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.次要文字)
+                                .monospacedDigit()
+                        }
+                    }
                 }
             }
 
@@ -87,11 +117,10 @@ private struct 顶部状态区: View {
             .disabled(状态.操作中 || 状态.当前VPN状态 == .无效)
             .padding(.top, 4)
         }
-        .frame(height: 56)
-        // 连接时长每秒刷新（仅在已连接时订阅）
+        .frame(minHeight: 56)
+        // 每秒刷新连接时长与实时流量
         .onReceive(计时器) { _ in
-            // 空实现，仅用于触发 状态.连接时长 的重新读取
-            // 已连接时 状态.连接时长 每秒变化，视图自动重算
+            流量 = 状态.命令客户端?.status
         }
     }
 }
