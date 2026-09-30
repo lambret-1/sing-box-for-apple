@@ -105,41 +105,56 @@ private struct 配置管理视图: View {
             if 加载中 {
                 ProgressView()
                     .controlSize(.large)
-            } else if 配置列表.isEmpty {
-                EmptyStateView(图标: "square.stack.3d.up",
-                               标题: "暂无配置",
-                               说明: "点击右上角添加配置文件")
             } else {
                 List {
+                    // 配置文件列表（空时显示提示行）
                     Section {
-                        ForEach(配置列表) { 配置 in
-                            Button {
-                                切换配置(配置.id)
-                            } label: {
-                                HStack(spacing: 间距常量.中等) {
-                                    Image(systemName: 配置.类型图标)
-                                        .foregroundColor(.主题色)
-                                        .frame(width: 24)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(配置.name)
-                                            .font(字体层级.正文)
-                                            .foregroundColor(.primary)
-                                        Text(配置.类型说明)
-                                            .font(字体层级.辅助说明)
-                                            .foregroundColor(.次要文字)
-                                    }
-                                    Spacer()
-                                    if 配置.id == 当前选中 {
-                                        Image(systemName: "checkmark")
-                                            .font(.system(size: 14, weight: .semibold))
+                        if 配置列表.isEmpty {
+                            HStack {
+                                Spacer()
+                                VStack(spacing: 6) {
+                                    Image(systemName: "square.stack.3d.up")
+                                        .font(.system(size: 28))
+                                        .foregroundColor(.次要文字)
+                                    Text("暂无配置")
+                                        .font(字体层级.辅助说明)
+                                        .foregroundColor(.次要文字)
+                                }
+                                Spacer()
+                            }
+                            .padding(.vertical, 20)
+                        } else {
+                            ForEach(配置列表) { 配置 in
+                                Button {
+                                    切换配置(配置.id)
+                                } label: {
+                                    HStack(spacing: 间距常量.中等) {
+                                        Image(systemName: 配置.类型图标)
                                             .foregroundColor(.主题色)
+                                            .frame(width: 24)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(配置.name)
+                                                .font(字体层级.正文)
+                                                .foregroundColor(.primary)
+                                            Text(配置.类型说明)
+                                                .font(字体层级.辅助说明)
+                                                .foregroundColor(.次要文字)
+                                        }
+                                        Spacer()
+                                        if 配置.id == 当前选中 {
+                                            Image(systemName: "checkmark")
+                                                .font(.system(size: 14, weight: .semibold))
+                                                .foregroundColor(.主题色)
+                                        }
                                     }
                                 }
                             }
                         }
+                    } header: {
+                        Text("配置文件")
                     }
 
-                    // MARK: 功能页面导航入口
+                    // MARK: 功能页面导航入口（始终显示）
                     Section("功能页面") {
                         NavigationLink {
                             DNS设置页面()

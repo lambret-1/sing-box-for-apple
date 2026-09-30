@@ -10,6 +10,7 @@
 import Foundation
 import SwiftUI
 import NetworkExtension
+import Combine
 import Library
 import Libbox
 
@@ -163,6 +164,9 @@ final class 新UI状态: ObservableObject {
     /// 官方扩展环境（包含 ExtensionProfile / CommandClient）
     private weak var 扩展环境: ExtensionEnvironments?
 
+    /// Combine 订阅集合（用于监听官方数据层变化）
+    private var 可取消 = Set<AnyCancellable>()
+
     // MARK: UI 导航状态
 
     /// 当前选中的顶部功能卡片
@@ -187,6 +191,24 @@ final class 新UI状态: ObservableObject {
     /// 绑定官方扩展环境（在入口视图调用）
     func 绑定环境(_ 环境: ExtensionEnvironments) {
         self.扩展环境 = 环境
+        // 监听扩展环境变化（extensionProfile 加载 / 切换）
+        环境.objectWillChange
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &可取消)
+        // 监听 extensionProfile 变化，重新订阅其状态变化
+        环境.$extensionProfile
+            .sink { [weak self] 新配置 in
+                self?.objectWillChange.send()
+                // 订阅新 extensionProfile 的状态变化
+                新配置?.objectWillChange
+                    .sink { [weak self] _ in
+                        self?.objectWillChange.send()
+                    }
+                    .store(in: &self!.可取消)
+            }
+            .store(in: &可取消)
     }
 
     // MARK: VPN 状态访问
