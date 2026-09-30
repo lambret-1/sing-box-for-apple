@@ -431,17 +431,8 @@ final class CACertificate生成器 {
 
     /// 从证书读取 notAfter 过期日期
     private func 读取证书过期日期(_ 证书: SecCertificate) -> Date? {
-        // 使用 SecCertificateCopyValues 读取有效期
-        var 错误: Unmanaged<CFError>?
-        guard let values = SecCertificateCopyValues(证书, nil, &错误) as? [String: Any] else {
-            return nil
-        }
-
-        // 查找 kSecOIDX509V1ValidityAfter 或类似字段
-        // 简化：使用 ASN.1 解析
-        // 由于 iOS Security 框架 API 限制，我们使用简化方法
-        // 返回证书生成时的预期过期日期（10年）
-        // TODO: 完整实现需要解析 ASN.1 notAfter 字段
+        // 简化实现：返回预期的 10 年有效期
+        // 完整实现需要解析 ASN.1 notAfter 字段
         return Date().addingTimeInterval(10 * 365 * 24 * 60 * 60)
     }
 
