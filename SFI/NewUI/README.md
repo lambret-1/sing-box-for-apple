@@ -20,7 +20,7 @@ SFI/NewUI/
 │   ├── StateBadge.swift      # 状态徽章
 │   ├── 顶部功能卡片栏.swift    # 横向滑动功能卡片导航
 │   ├── 底部工具栏.swift        # 底部固定工具栏（4入口）
-│   └── 底部弹窗容器.swift      # 底部弹窗 + 运行模式面板
+│   └── 底部弹窗容器.swift      # 底部弹窗（配置管理/官方工具/官方设置/关于）+ 运行模式面板
 └── 页面/
     ├── 仪表盘视图.swift        # 主页面（顶部状态区+卡片栏+内容区+工具栏）
     └── 内容区/
@@ -42,7 +42,7 @@ SFI/NewUI/
 
 - **VPN 状态/连接**：`ExtensionProfile`（start/stop/status），通过 `新UI状态.切换连接()` 调用
 - **日志/策略组/连接**：`CommandClient`，通过 `新UI状态.命令客户端` 访问
-- **配置文件管理**：`ProfileManager`（后续阶段接入）
+- **配置文件管理**：`ProfileManager.list()` 读取列表，`SharedPreferences.selectedProfileID` 切换当前配置，切换后经 `ExtensionEnvironments.selectedProfileUpdate` 通知并在已连接时 `reloadService()` 重载服务
 
 ## 迁移进度
 
@@ -51,7 +51,7 @@ SFI/NewUI/
 | 第一阶段 | 设计系统与基础组件 | ✅ 完成 |
 | 第二阶段 | 主页面框架（仪表盘+状态区+工具栏） | ✅ 完成 |
 | 第三阶段 | 四个内容区骨架 | ✅ 完成 |
-| 第四阶段 | 设置页面框架（并入官方工具/设置） | ⏳ 待开始 |
+| 第四阶段 | 底部弹窗并入官方工具/设置，完善配置管理与关于弹窗 | ✅ 完成 |
 | 第五阶段 | 功能页面（DNS/MITM/抓包/重写） | ⏳ 待开始 |
 | 第六阶段 | 数据层完整对接 | ⏳ 待开始 |
 | 第七阶段 | 编译验证、UI微调、性能优化 | ⏳ 待开始 |
