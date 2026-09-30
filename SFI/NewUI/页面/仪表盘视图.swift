@@ -60,7 +60,6 @@ struct 仪表盘视图: View {
         .environmentObject(环境.commandClient)
         .background(Color.页面背景.ignoresSafeArea())
         .底部弹窗(弹窗类型: $状态.当前底部弹窗)
-        .运行模式面板(显示: $状态.显示运行模式面板)
         .错误提示(信息: 状态.错误信息)
         .onAppear {
             // 加载配置列表

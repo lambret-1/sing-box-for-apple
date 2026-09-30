@@ -4,8 +4,7 @@
 //
 //  底部固定工具栏，4个功能入口（配置/工具/设置/关于）
 //  点击图标从底部弹出90%高度弹窗
-//  设置图标点击打开设置，重按弹出运行模式选择面板
-//  数据来源：新UI状态.当前底部弹窗 / 显示运行模式面板 / 当前VPN状态
+//  数据来源：新UI状态.当前底部弹窗 / 当前VPN状态
 //
 
 import SwiftUI
@@ -31,8 +30,7 @@ struct 底部工具栏: View {
                 Spacer()
 
                 if 弹窗类型 == .设置 {
-                    // 设置按钮：SF Symbols 图标，VPN连接时顺时针旋转，
-                    // 点击打开设置弹窗，重按弹出运行模式选择面板
+                    // 设置按钮：SF Symbols 图标，VPN连接时顺时针旋转，点击打开设置弹窗
                     设置按钮(弹窗类型: 弹窗类型)
                 } else {
                     // 普通按钮：点击打开对应弹窗
@@ -82,7 +80,7 @@ struct 底部工具栏: View {
         }
     }
 
-    /// 设置按钮（点击打开设置弹窗，长按弹出 ContextMenu 选择运行模式）
+    /// 设置按钮（点击打开设置弹窗，VPN连接时图标旋转）
     private func 设置按钮(弹窗类型: 底部弹窗类型) -> some View {
         Image(systemName: 弹窗类型.图标)
             .font(.system(size: 24, weight: .regular))
@@ -92,13 +90,6 @@ struct 底部工具栏: View {
             .contentShape(Rectangle())
             .onTapGesture {
                 状态.当前底部弹窗 = 弹窗类型
-            }
-            .contextMenu {
-                Button {
-                    状态.显示运行模式面板 = true
-                } label: {
-                    Label("运行模式", systemImage: "circle.grid.2x2.fill")
-                }
             }
     }
 }
