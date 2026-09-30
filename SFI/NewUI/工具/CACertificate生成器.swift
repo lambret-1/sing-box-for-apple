@@ -179,7 +179,7 @@ final class CACertificate生成器 {
         // AttributeValueAssertion: SEQUENCE { OID, value }
         var avaData = Data()
         avaData.append(oidData)
-        avaData.append(包装为UTF8String(值数据))
+        avaData.append(包装为UTF8字符串(值数据))
         let ava = 包装为序列(avaData)
 
         // RDN: SET OF AVA
