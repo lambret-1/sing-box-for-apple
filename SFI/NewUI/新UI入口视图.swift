@@ -82,7 +82,7 @@ private struct 配置安装引导视图: View {
     @EnvironmentObject private var 状态: 新UI状态
 
     var body: some View {
-        VStack(spacing: 间距常量.大) {
+        VStack(spacing: 间距常量.宽松) {
             Spacer()
 
             Image(systemName: "network.slash")
@@ -97,14 +97,14 @@ private struct 配置安装引导视图: View {
                 .font(字体层级.正文)
                 .foregroundColor(.次要文字)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 间距常量.大)
+                .padding(.horizontal, 间距常量.宽松)
 
             AppButton("安装配置文件", 样式: .主要) {
                 Task { @MainActor in
                     await 环境.reload()
                 }
             }
-            .padding(.horizontal, 间距常量.大)
+            .padding(.horizontal, 间距常量.宽松)
 
             Spacer()
         }
