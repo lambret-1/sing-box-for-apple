@@ -11,6 +11,7 @@ import Foundation
 import SwiftUI
 import NetworkExtension
 import Library
+import Libbox
 
 // MARK: - 顶部卡片类型
 
@@ -237,5 +238,31 @@ final class 新UI状态: ObservableObject {
     /// 命令客户端（用于日志、策略组、连接信息）
     var 命令客户端: CommandClient? {
         扩展环境?.commandClient
+    }
+
+    // MARK: 节点切换与测速操作
+
+    /// 切换指定策略组的选中节点
+    /// - Parameters:
+    ///   - 组标签: 策略组标签（OutboundGroup.tag）
+    ///   - 节点标签: 目标节点标签（OutboundGroupItem.tag）
+    func 切换节点(组标签: String, 节点标签: String) async {
+        do {
+            let client = try CommandTarget.standaloneClient()
+            try await client.selectOutbound(组标签, outboundTag: 节点标签)
+        } catch {
+            错误信息 = "切换节点失败：\(error.localizedDescription)"
+        }
+    }
+
+    /// 触发指定策略组的组内批量测速（URL 测试）
+    /// - Parameter 组标签: 策略组标签（OutboundGroup.tag）
+    func 测速(组标签: String) async {
+        do {
+            let client = try CommandTarget.standaloneClient()
+            try await client.urlTest(组标签)
+        } catch {
+            错误信息 = "测速失败：\(error.localizedDescription)"
+        }
     }
 }
