@@ -440,7 +440,7 @@ struct 证书安装引导页面: View {
 
                 // 步骤内容
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 间距常量.大) {
+                    VStack(alignment: .leading, spacing: 间距常量.宽松) {
                         switch 当前步骤 {
                         case 1:
                             步骤一内容
@@ -491,7 +491,7 @@ struct 证书安装引导页面: View {
     private var 步骤一内容: some View {
         VStack(alignment: .leading, spacing: 间距常量.中等) {
             Text("第一步：安装描述文件")
-                .font(字体层级.标题)
+                .font(字体层级.卡片标题)
 
             Text("""
             1. 点击下方"导出证书"按钮
@@ -510,7 +510,7 @@ struct 证书安装引导页面: View {
     private var 步骤二内容: some View {
         VStack(alignment: .leading, spacing: 间距常量.中等) {
             Text("第二步：启用完全信任")
-                .font(字体层级.标题)
+                .font(字体层级.卡片标题)
 
             Text("""
             1. 打开 iOS"设置"App
@@ -529,7 +529,7 @@ struct 证书安装引导页面: View {
     private var 步骤三内容: some View {
         VStack(alignment: .leading, spacing: 间距常量.中等) {
             Text("第三步：完成")
-                .font(字体层级.标题)
+                .font(字体层级.卡片标题)
 
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 60))
@@ -559,7 +559,7 @@ struct 证书安装引导页面: View {
                     withAnimation { 当前步骤 += 1 }
                 } label: {
                     Text("下一步")
-                        .font(字体层级.按钮)
+                        .font(字体层级.按钮文字)
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding()
@@ -579,7 +579,7 @@ struct 证书安装引导页面: View {
                     关闭()
                 } label: {
                     Text("完成")
-                        .font(字体层级.按钮)
+                        .font(字体层级.按钮文字)
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding()
