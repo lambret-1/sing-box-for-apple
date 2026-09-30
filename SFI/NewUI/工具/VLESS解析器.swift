@@ -101,7 +101,7 @@ struct 节点配置: Equatable {
 ///
 /// - 成功：返回结构化节点配置
 /// - 失败：返回中文失败原因
-enum 解析结果 {
+enum 解析结果: Equatable {
     case 成功(节点配置)
     case 失败(原因: String)
 }
