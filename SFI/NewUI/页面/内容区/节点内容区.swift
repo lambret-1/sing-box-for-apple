@@ -78,7 +78,6 @@ private struct 节点列表视图: View {
                                 )
                             }
                         }
-                        .padding(.horizontal, 间距常量.标准)
                         .padding(.bottom, 间距常量.标准)
                     }
                 }
@@ -114,7 +113,6 @@ private struct 节点列表视图: View {
         .padding(.vertical, 10)
         .background(Color.卡片背景)
         .cornerRadius(圆角常量.标准)
-        .padding(.horizontal, 间距常量.标准)
     }
 
     // MARK: - 搜索过滤

@@ -153,7 +153,6 @@ private struct 规则与日志内容视图: View {
                 }
             }
         }
-        .padding(.horizontal, 间距常量.标准)
     }
 
     // MARK: - 顶部工具栏（级别筛选器 + 清除按钮）

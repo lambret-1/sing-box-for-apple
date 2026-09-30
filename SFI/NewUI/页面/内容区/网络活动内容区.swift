@@ -124,7 +124,6 @@ private struct 网络活动内容视图: View {
                 .cornerRadius(圆角常量.标准)
             }
         }
-        .padding(.horizontal, 间距常量.标准)
     }
 
     // MARK: - 搜索栏
@@ -191,7 +190,6 @@ private struct 网络活动内容视图: View {
                 单位: ""
             )
         }
-        .padding(.horizontal, 16)
         .padding(.vertical, 16)
         .background(Color.卡片背景)
         .cornerRadius(圆角常量.标准)

@@ -30,7 +30,6 @@ struct 策略组内容区: View {
                         .foregroundColor(.警告色)
                     Spacer()
                 }
-                .padding(.horizontal, 间距常量.标准)
                 .padding(.top, 8)
             }
 
@@ -89,7 +88,6 @@ private struct 策略组列表视图: View {
                                 )
                             }
                         }
-                        .padding(.horizontal, 间距常量.标准)
                         .padding(.bottom, 间距常量.标准)
                     }
                 }
