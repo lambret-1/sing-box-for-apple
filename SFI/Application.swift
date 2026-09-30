@@ -20,7 +20,7 @@ struct Application: App {
 
     var body: some Scene {
         WindowGroup {
-            MainView()
+            新UI入口视图()
                 .tailscaleStatusSubscription(tailscaleViewModel, environments: environments, peerStore: peerStore)
                 .environmentObject(environments)
                 .environmentObject(peerStore)
