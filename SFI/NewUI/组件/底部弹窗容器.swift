@@ -68,229 +68,91 @@ private struct 底部弹窗内容: View {
 private struct 弹窗内容视图: View {
     /// 弹窗类型
     let 类型: 底部弹窗类型
+    /// 新UI全局状态
+    @EnvironmentObject private var 状态: 新UI状态
 
     var body: some View {
         switch 类型 {
         case .配置:
-            配置管理视图()
+            ProfilePickerSheet(
+                profileList: $状态.配置列表,
+                selectedProfileID: $状态.当前选中配置
+            )
+            .onAppear {
+                Task { await 状态.加载配置列表() }
+            }
         case .工具:
             ToolsView()
         case .设置:
-            SettingView()
+            设置与功能页面视图()
         case .关于:
             关于视图()
         }
     }
 }
 
-// MARK: - 配置管理
+// MARK: - 设置 + 功能页面组合视图
 
-/// 配置管理视图：从官方 ProfileManager 读取配置列表，点击切换当前配置
-@MainActor
-private struct 配置管理视图: View {
-    /// 官方扩展环境（切换配置时调用 selectedProfileUpdate / reloadService）
-    @EnvironmentObject private var 环境: ExtensionEnvironments
-
-    /// 配置列表（官方 ProfilePreview 快照）
-    @State private var 配置列表: [ProfilePreview] = []
-    /// 当前选中的配置 ID
-    @State private var 当前选中: Int64 = -1
-    /// 是否正在加载
-    @State private var 加载中 = true
-    /// 提示文案（错误 / 占位提示）
-    @State private var 提示: String?
-
+/// 设置弹窗：官方 SettingView + 底部功能页面入口
+private struct 设置与功能页面视图: View {
     var body: some View {
-        Group {
-            if 加载中 {
-                ProgressView()
-                    .controlSize(.large)
-            } else {
-                List {
-                    // 配置文件列表（空时显示提示行）
-                    Section {
-                        if 配置列表.isEmpty {
-                            HStack {
-                                Spacer()
-                                VStack(spacing: 6) {
-                                    Image(systemName: "square.stack.3d.up")
-                                        .font(.system(size: 28))
-                                        .foregroundColor(.次要文字)
-                                    Text("暂无配置")
-                                        .font(字体层级.辅助说明)
-                                        .foregroundColor(.次要文字)
-                                }
-                                Spacer()
-                            }
-                            .padding(.vertical, 20)
-                        } else {
-                            ForEach(配置列表) { 配置 in
-                                Button {
-                                    切换配置(配置.id)
-                                } label: {
-                                    HStack(spacing: 间距常量.中等) {
-                                        Image(systemName: 配置.类型图标)
-                                            .foregroundColor(.主题色)
-                                            .frame(width: 24)
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(配置.name)
-                                                .font(字体层级.正文)
-                                                .foregroundColor(.primary)
-                                            Text(配置.类型说明)
-                                                .font(字体层级.辅助说明)
-                                                .foregroundColor(.次要文字)
-                                        }
-                                        Spacer()
-                                        if 配置.id == 当前选中 {
-                                            Image(systemName: "checkmark")
-                                                .font(.system(size: 14, weight: .semibold))
-                                                .foregroundColor(.主题色)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    } header: {
-                        Text("配置文件")
-                    }
+        VStack(spacing: 0) {
+            SettingView()
+                .layoutPriority(1)
 
-                    // MARK: 功能页面导航入口（始终显示）
-                    Section("功能页面") {
-                        NavigationLink {
-                            DNS设置页面()
-                        } label: {
-                            功能页面行(图标: "network", 标题: "DNS 设置", 说明: "自定义 DNS 服务器与查询统计")
-                        }
-
-                        NavigationLink {
-                            MITM设置页面()
-                        } label: {
-                            功能页面行(图标: "lock.slash", 标题: "MITM 解密", 说明: "HTTPS 中间人解密与证书管理")
-                        }
-
-                        NavigationLink {
-                            抓包列表页面()
-                        } label: {
-                            功能页面行(图标: "waveform.badge.magnifyingglass", 标题: "HTTP 抓包", 说明: "实时捕获与查看 HTTP 请求")
-                        }
-
-                        NavigationLink {
-                            重写规则设置页面()
-                        } label: {
-                            功能页面行(图标: "pencil.and.ellipsis.rectangle", 标题: "重写规则", 说明: "请求 / 响应 URL 重写规则")
-                        }
-                    }
+            // 功能页面入口区域
+            VStack(spacing: 0) {
+                Divider()
+                HStack {
+                    Text("功能页面")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.次要文字)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
+                    Spacer()
                 }
-                .listStyle(.insetGrouped)
-            }
-        }
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    提示 = "后续阶段支持"
-                } label: {
-                    Image(systemName: "plus")
+                HStack(spacing: 0) {
+                    功能导航项(图标: "network", 标题: "DNS", 目标: DNS设置页面())
+                    功能导航项(图标: "lock.slash", 标题: "MITM", 目标: MITM设置页面())
+                    功能导航项(图标: "waveform.badge.magnifyingglass", 标题: "抓包", 目标: 抓包列表页面())
+                    功能导航项(图标: "pencil.and.ellipsis.rectangle", 标题: "重写", 目标: 重写规则设置页面())
                 }
-                .accessibilityLabel("添加配置")
+                .padding(.horizontal, 8)
+                .padding(.bottom, 8)
             }
-        }
-        .alert("提示", isPresented: Binding(
-            get: { 提示 != nil },
-            set: { if !$0 { 提示 = nil } }
-        )) {
-            Button("好", role: .cancel) { 提示 = nil }
-        } message: {
-            Text(提示 ?? "")
-        }
-        .task {
-            await 加载配置()
-        }
-    }
-
-    /// 从官方 ProfileManager 加载配置列表
-    private func 加载配置() async {
-        do {
-            let 列表 = try await ProfileManager.list()
-            配置列表 = 列表.map { ProfilePreview($0) }
-            当前选中 = await SharedPreferences.selectedProfileID.get()
-            // 若当前选中不在列表中，自动选中第一项并持久化
-            if !配置列表.contains(where: { $0.id == 当前选中 }), let 首个 = 配置列表.first {
-                当前选中 = 首个.id
-                await SharedPreferences.selectedProfileID.set(当前选中)
-            }
-        } catch {
-            提示 = "加载配置失败：\(error.localizedDescription)"
-        }
-        加载中 = false
-    }
-
-    /// 切换当前配置：写偏好 → 通知环境 → 已连接则重载服务
-    private func 切换配置(_ id: Int64) {
-        guard id != 当前选中 else { return }
-        Task { @MainActor in
-            await SharedPreferences.selectedProfileID.set(id)
-            环境.selectedProfileUpdate.send()
-            当前选中 = id
-            if let profile = 环境.extensionProfile, profile.status == .connected {
-                do {
-                    try await profile.reloadService()
-                } catch {
-                    提示 = "重载服务失败：\(error.localizedDescription)"
-                }
-            }
+            .background(Color.页面背景)
         }
     }
 }
 
-/// ProfilePreview 类型说明与图标辅助
-private extension ProfilePreview {
-    /// 中文类型说明
-    var 类型说明: String {
-        switch type {
-        case .local: return "本地配置"
-        case .icloud: return "iCloud 同步"
-        case .remote: return "远程订阅"
-        }
-    }
-
-    /// 对应 SF Symbols 图标
-    var 类型图标: String {
-        switch type {
-        case .local: return "folder"
-        case .icloud: return "icloud"
-        case .remote: return "arrow.down.circle"
-        }
-    }
-}
-
-// MARK: - 功能页面导航行
-
-/// 功能页面导航行：图标 + 标题 + 说明，用于 NavigationLink 标签
-private struct 功能页面行: View {
-    /// SF Symbols 图标
+/// 功能页面导航项（图标 + 标题，NavigationLink）
+private struct 功能导航项<目标: View>: View {
     let 图标: String
-    /// 标题
     let 标题: String
-    /// 说明
-    let 说明: String
+    let 目标: 目标
 
     var body: some View {
-        HStack(spacing: 间距常量.中等) {
-            Image(systemName: 图标)
-                .foregroundColor(.主题色)
-                .frame(width: 24)
-            VStack(alignment: .leading, spacing: 2) {
+        NavigationLink {
+            目标
+        } label: {
+            VStack(spacing: 4) {
+                Image(systemName: 图标)
+                    .font(.system(size: 18))
+                    .foregroundColor(.主题色)
+                    .frame(width: 36, height: 36)
+                    .background(Color.主题色.opacity(0.12))
+                    .cornerRadius(10)
                 Text(标题)
-                    .font(字体层级.正文)
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.primary)
-                Text(说明)
-                    .font(字体层级.辅助说明)
-                    .foregroundColor(.次要文字)
             }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
         }
-        .padding(.vertical, 间距常量.紧凑 / 2)
+        .buttonStyle(PlainButtonStyle())
     }
 }
+
 
 // MARK: - 关于行（弹窗内使用）
 

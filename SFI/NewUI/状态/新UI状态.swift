@@ -184,6 +184,31 @@ final class 新UI状态: ObservableObject {
     /// 最近一次操作错误信息
     @Published var 错误信息: String?
 
+    // MARK: 配置文件管理
+
+    /// 配置文件列表（官方 ProfilePreview）
+    @Published var 配置列表: [ProfilePreview] = []
+
+    /// 当前选中的配置 ID
+    @Published var 当前选中配置: Int64 = 0
+
+    /// 加载配置文件列表（从官方 ProfileManager）
+    func 加载配置列表() async {
+        do {
+            let 列表 = try await ProfileManager.list().map { ProfilePreview($0) }
+            配置列表 = 列表
+            let 已选 = await SharedPreferences.selectedProfileID.get()
+            if 列表.contains(where: { $0.id == 已选 }) {
+                当前选中配置 = 已选
+            } else if let 首个 = 列表.first {
+                当前选中配置 = 首个.id
+                await SharedPreferences.selectedProfileID.set(首个.id)
+            }
+        } catch {
+            错误信息 = "加载配置列表失败：\(error.localizedDescription)"
+        }
+    }
+
     // MARK: 初始化
 
     init() {}

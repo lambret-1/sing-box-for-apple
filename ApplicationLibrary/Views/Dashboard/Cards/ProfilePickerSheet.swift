@@ -6,7 +6,7 @@ import SwiftUI
 #endif
 
 @MainActor
-struct ProfilePickerSheet: View {
+public struct ProfilePickerSheet: View {
     @EnvironmentObject private var environments: ExtensionEnvironments
     @Environment(\.dismiss) private var dismiss
 
@@ -32,6 +32,12 @@ struct ProfilePickerSheet: View {
         #else
             isEditing
         #endif
+    }
+
+    /// 公开初始化方法（供外部模块调用）
+    public init(profileList: Binding<[ProfilePreview]>, selectedProfileID: Binding<Int64>) {
+        _profileList = profileList
+        _selectedProfileID = selectedProfileID
     }
 
     var body: some View {
