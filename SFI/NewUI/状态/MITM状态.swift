@@ -294,6 +294,12 @@ final class MITM状态: ObservableObject {
         let 生成器 = CACertificate生成器.共享
         证书状态 = 生成器.检测证书状态()
         CA证书PEM = 生成器.获取证书PEM() ?? ""
+        // 同步保存 P12 Base64 到 App Group 供内核使用
+        if let p12Base64 = 生成器.获取P12Base64(),
+           let 共享 = 共享默认 {
+            共享.set(p12Base64, forKey: 键前缀 + "p12_base64")
+            共享.synchronize()
+        }
     }
 
     /// 重新生成 CA 证书
