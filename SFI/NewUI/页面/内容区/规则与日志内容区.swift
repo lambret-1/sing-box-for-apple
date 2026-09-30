@@ -2,9 +2,9 @@
 //  规则与日志内容区.swift
 //  sing-box-for-apple 新UI
 //
-//  重构：直接使用官方 LogView，保留完整的日志查看功能
-//  官方 LogView 使用 UITextView（UIViewRepresentable）显示日志文本
-//  关键：必须给明确高度，否则在外层 ScrollView 中高度计算为0导致不显示
+//  重构：使用 NavigationStack 包裹官方 LogView，显示官方工具栏
+//  官方 LogView 使用 UITextView 显示日志文本，toolbar 包含搜索/暂停/菜单
+//  日志页不使用外层 ScrollView，占满剩余空间延伸到底部工具栏上方
 //
 
 import SwiftUI
@@ -13,7 +13,7 @@ import Library
 
 // MARK: - 规则与日志内容区入口
 
-/// 规则与日志内容区视图：直接嵌入官方 LogView
+/// 规则与日志内容区视图：NavigationStack 包裹官方 LogView
 struct 规则与日志内容区: View {
     /// 全局新UI状态
     @EnvironmentObject private var 状态: 新UI状态
@@ -37,16 +37,16 @@ struct 规则与日志内容区: View {
                 .padding(.vertical, 8)
             }
 
-            // 官方日志视图 - 必须给明确高度
-            // 使用 GeometryReader 获取可用高度，确保 UITextView 能正常计算布局
-            GeometryReader { 几何 in
+            // 官方日志视图 - NavigationStack 包裹以显示 toolbar
+            NavigationStack {
                 LogView()
                     .environmentObject(环境)
-                    .frame(width: 几何.size.width, height: 几何.size.height)
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar(.hidden, for: .navigationBar)
                     .background(Color.页面背景)
             }
-            // 给一个最小高度，确保在 ScrollView 中不会被压缩为0
-            .frame(minHeight: UIScreen.main.bounds.height * 0.55)
+            // 占满剩余空间
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(Color.页面背景)
     }

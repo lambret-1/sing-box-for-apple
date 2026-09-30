@@ -30,22 +30,28 @@ struct 仪表盘视图: View {
             // 横向功能卡片栏（固定）
             顶部功能卡片栏()
 
-            // 内容区：占满剩余高度，外包 ScrollView
-            ScrollView {
-                VStack(spacing: 间距常量.中等) {
-                    // 官方配置卡片（日志页不显示，避免占用日志输出空间）
-                    if 状态.当前顶部卡片 != .规则与日志 {
-                        ProfileCard(
-                            profileList: $状态.配置列表,
-                            selectedProfileID: $状态.当前选中配置
-                        )
-                        .environmentObject(环境)
-                    }
+            // 内容区：占满剩余高度
+            // 日志页不使用 ScrollView，让官方 LogView 占满剩余空间延伸到底部
+            if 状态.当前顶部卡片 == .规则与日志 {
+                规则与日志内容区()
+                    .environmentObject(环境)
+            } else {
+                ScrollView {
+                    VStack(spacing: 间距常量.中等) {
+                        // 官方配置卡片（仅节点页显示）
+                        if 状态.当前顶部卡片 == .节点 {
+                            ProfileCard(
+                                profileList: $状态.配置列表,
+                                selectedProfileID: $状态.当前选中配置
+                            )
+                            .environmentObject(环境)
+                        }
 
-                    主内容区()
-                        .padding(.bottom, 间距常量.标准)
+                        主内容区()
+                            .padding(.bottom, 间距常量.标准)
+                    }
+                    .padding(.horizontal, 间距常量.标准)
                 }
-                .padding(.horizontal, 间距常量.标准)
             }
             .onAppear {
                 // 加载配置列表

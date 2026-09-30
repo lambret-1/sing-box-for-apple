@@ -37,8 +37,10 @@ struct 策略组内容区: View {
             }
 
             // 官方策略组列表视图
+            // 官方 GroupListView 内部有 .padding(16)，添加负 padding 抵消以与配置区宽度对齐
             GroupListView()
                 .environmentObject(环境)
+                .padding(.horizontal, -16)
                 // 覆盖官方背景色，使用新UI设计系统
                 .background(Color.页面背景)
         }
