@@ -523,6 +523,7 @@ enum 证书生成错误: Error, LocalizedError {
     case 私钥生成失败(String)
     case 公钥获取失败
     case 公钥导出失败
+    case 私钥导出失败
     case 证书创建失败
     case 签名失败
     case 目录创建失败
@@ -536,6 +537,8 @@ enum 证书生成错误: Error, LocalizedError {
             return "公钥获取失败"
         case .公钥导出失败:
             return "公钥导出失败"
+        case .私钥导出失败:
+            return "私钥导出失败"
         case .证书创建失败:
             return "证书创建失败"
         case .签名失败:
