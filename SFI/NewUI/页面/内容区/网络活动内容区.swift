@@ -3,7 +3,7 @@
 //  sing-box-for-apple 新UI
 //
 //  第六阶段B - 对接官方 CommandClient 真实数据
-//  网络活动内容区：顶部统计卡片 + 连接记录列表（实时刷新）
+//  网络活动内容区：顶部统计卡片 + 连接记录列表（通过 @ObservedObject 实时刷新）
 //
 
 import SwiftUI
@@ -13,8 +13,6 @@ import Library
 // MARK: - 字节格式化辅助
 
 /// 格式化字节数为可读字符串（B / KB / MB / GB）
-/// - Parameter 字节: 字节数
-/// - Returns: 格式化后的字符串，如 "1.2MB"
 private func 格式化字节(_ 字节: Int64) -> String {
     if 字节 < 1024 {
         return "\(字节)B"
@@ -27,9 +25,9 @@ private func 格式化字节(_ 字节: Int64) -> String {
     }
 }
 
-// MARK: - 网络活动内容区视图
+// MARK: - 网络活动内容区（入口视图）
 
-/// 网络活动内容区视图
+/// 网络活动内容区入口视图：获取 CommandClient 并传递给子视图
 struct 网络活动内容区: View {
     /// 全局新UI状态
     @EnvironmentObject private var 状态: 新UI状态
@@ -37,11 +35,32 @@ struct 网络活动内容区: View {
     /// 搜索关键词
     @State private var 搜索关键词 = ""
 
-    /// 命令客户端（ObservableObject，其 @Published 属性变化自动触发刷新）
-    private var 命令客户端: CommandClient? { 状态.命令客户端 }
+    var body: some View {
+        if let 客户端 = 状态.命令客户端 {
+            网络活动内容视图(命令客户端: 客户端, 搜索关键词: $搜索关键词)
+        } else {
+            // 命令客户端尚未就绪
+            VStack {
+                ProgressView("正在初始化…")
+                    .frame(maxWidth: .infinity, minHeight: 200)
+            }
+            .padding(.horizontal, 间距常量.标准)
+        }
+    }
+}
+
+// MARK: - 网络活动内容视图（观察 CommandClient）
+
+/// 网络活动内容视图：通过 @ObservedObject 观察 CommandClient 的 @Published connections，实时刷新
+private struct 网络活动内容视图: View {
+    /// 命令客户端（@Published connections 变化时自动刷新）
+    @ObservedObject var 命令客户端: CommandClient
+
+    /// 搜索关键词（从入口视图绑定）
+    @Binding var 搜索关键词: String
 
     /// 原始连接列表（官方数据，未加载时为 nil）
-    private var 原始连接: [LibboxConnection]? { 命令客户端?.connections }
+    private var 原始连接: [LibboxConnection]? { 命令客户端.connections }
 
     /// 过滤后的连接列表
     private var 过滤后连接: [LibboxConnection] {
@@ -83,7 +102,6 @@ struct 网络活动内容区: View {
 
             // 连接记录列表
             if 原始连接 == nil {
-                // 数据未加载
                 ProgressView("正在加载连接数据…")
                     .frame(maxWidth: .infinity, minHeight: 200)
             } else if 过滤后连接.isEmpty {
@@ -195,7 +213,6 @@ struct 网络活动内容区: View {
                 .foregroundColor(.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
-            // 占位高度
             Color.clear.frame(height: 6)
             Text(单位)
                 .font(.system(size: 10))
@@ -248,7 +265,6 @@ private struct 连接记录行: View {
                     .padding(.vertical, 2)
                     .background(网络颜色)
                     .cornerRadius(圆角常量.小)
-                // 连接状态点
                 Circle()
                     .fill(已关闭 ? Color.次要文字 : Color.成功色)
                     .frame(width: 8, height: 8)
@@ -258,7 +274,7 @@ private struct 连接记录行: View {
                 Spacer()
             }
 
-            // 第二行：目标地址（优先 displayDestination，含域名）
+            // 第二行：目标地址
             Text(连接.displayDestination())
                 .font(.system(size: 15, weight: .medium))
                 .lineLimit(1)

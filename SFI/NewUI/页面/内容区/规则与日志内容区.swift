@@ -3,7 +3,7 @@
 //  sing-box-for-apple 新UI
 //
 //  第六阶段B - 对接官方 CommandClient 真实数据
-//  规则与日志内容区：顶部日志级别筛选器 + 日志列表（级别标签 + 消息）
+//  规则与日志内容区：顶部日志级别筛选器 + 日志列表（通过 @ObservedObject 实时刷新）
 //
 
 import SwiftUI
@@ -55,9 +55,9 @@ private struct 日志筛选选项: Identifiable, Hashable {
     }
 }
 
-// MARK: - 规则与日志内容区视图
+// MARK: - 规则与日志内容区（入口视图）
 
-/// 规则与日志内容区视图
+/// 规则与日志内容区入口视图：获取 CommandClient 并传递给子视图
 struct 规则与日志内容区: View {
     /// 全局新UI状态
     @EnvironmentObject private var 状态: 新UI状态
@@ -65,20 +65,40 @@ struct 规则与日志内容区: View {
     /// 当前选中的日志级别筛选（nil 表示全部）
     @State private var 选中级别: LogLevel?
 
+    var body: some View {
+        if let 客户端 = 状态.命令客户端 {
+            规则与日志内容视图(命令客户端: 客户端, 选中级别: $选中级别)
+        } else {
+            VStack {
+                ProgressView("正在初始化…")
+                    .frame(maxWidth: .infinity, minHeight: 200)
+            }
+            .padding(.horizontal, 间距常量.标准)
+        }
+    }
+}
+
+// MARK: - 规则与日志内容视图（观察 CommandClient）
+
+/// 规则与日志内容视图：通过 @ObservedObject 观察 CommandClient 的 @Published logBuffer，实时刷新
+private struct 规则与日志内容视图: View {
+    /// 命令客户端（@Published logBuffer / initialLogsReceived 变化时自动刷新）
+    @ObservedObject var 命令客户端: CommandClient
+
+    /// 当前选中的日志级别筛选（从入口视图绑定）
+    @Binding var 选中级别: LogLevel?
+
     /// ScrollViewReader 滚动锚点
     private let 滚动锚点 = UUID()
 
-    /// 命令客户端
-    private var 命令客户端: CommandClient? { 状态.命令客户端 }
-
     /// 原始日志条目（官方数据）
     private var 原始日志: [LogEntry] {
-        命令客户端?.logBuffer.entries ?? []
+        命令客户端.logBuffer.entries
     }
 
     /// 是否已收到首批日志（区分"加载中"与"暂无日志"）
     private var 已收到首批日志: Bool {
-        命令客户端?.initialLogsReceived ?? false
+        命令客户端.initialLogsReceived
     }
 
     /// 过滤后的日志（官方 entries 为新日志在后，反转后新日志在上）
@@ -160,7 +180,7 @@ struct 规则与日志内容区: View {
 
             // 清除日志按钮
             Button {
-                命令客户端?.clearLogs()
+                命令客户端.clearLogs()
             } label: {
                 Image(systemName: "trash")
                     .font(.system(size: 14))
