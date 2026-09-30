@@ -56,7 +56,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: Libbox.xcframework
-          key: libbox-testing-gvisor
+          key: libbox-testing-gvisor-v2
 
       - name: 安装 Go 环境（仅缓存未命中时）
         if: steps.cache-libbox.outputs.cache-hit != 'true'
@@ -80,8 +80,11 @@ jobs:
           # 使用 testing 分支（sing-box默认分支），包含项目所需的最新 API
           git clone --depth 1 --branch testing https://github.com/SagerNet/sing-box.git sing-box-src
           cd sing-box-src
+          # 注入 with_gvisor 标签：build_libbox 硬编码 tags 列表，忽略 GOFLAGS，需直接修改源码
+          sed -i 's/darwinTags = append(darwinTags, "with_dhcp", "grpcnotrace")/darwinTags = append(darwinTags, "with_dhcp", "grpcnotrace", "with_gvisor")/' cmd/internal/build_libbox/main.go
+          echo "已注入 with_gvisor 标签："
+          grep "darwinTags = append" cmd/internal/build_libbox/main.go
           export PATH=$PATH:$(go env GOPATH)/bin
-          export GOFLAGS="-tags=with_gvisor"
           go run ./cmd/internal/build_libbox -target apple
           LIBBOX_PATH=$(find . -name "Libbox.xcframework" -type d | head -1)
           if [ -z "$LIBBOX_PATH" ]; then
@@ -90,6 +93,10 @@ jobs:
           fi
           cp -R "$LIBBOX_PATH" ../
           cd ..
+          # 验证 gVisor 已编译进 Libbox
+          echo "验证 gVisor 符号..."
+          GVISOR_COUNT=$(find Libbox.xcframework -name "*.framework" -exec sh -c 'nm "${0}"/$(basename "${0}" .framework) 2>/dev/null | grep -ci gvisor || echo 0' {} \; | paste -sd+ | bc 2>/dev/null || echo "0")
+          echo "gVisor 符号数量: $GVISOR_COUNT"
           echo "Libbox.xcframework 编译完成"
 
       - name: 保存 Libbox 缓存（编译成功后立即保存）
@@ -97,7 +104,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: Libbox.xcframework
-          key: libbox-testing-gvisor
+          key: libbox-testing-gvisor-v2
 
       - name: 使用缓存的 Libbox.xcframework
         if: steps.cache-libbox.outputs.cache-hit == 'true'
