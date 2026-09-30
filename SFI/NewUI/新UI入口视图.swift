@@ -80,6 +80,10 @@ struct 新UI入口视图: View {
 private struct 配置安装引导视图: View {
     @EnvironmentObject private var 环境: ExtensionEnvironments
     @EnvironmentObject private var 状态: 新UI状态
+    /// 是否正在安装
+    @State private var 安装中 = false
+    /// 错误信息
+    @State private var 错误: String?
 
     var body: some View {
         VStack(spacing: 间距常量.宽松) {
@@ -93,16 +97,22 @@ private struct 配置安装引导视图: View {
                 .font(字体层级.大标题)
                 .foregroundColor(.primary)
 
-            Text("需要先安装 VPN 配置文件才能使用隧道功能")
+            Text("需要先安装 VPN 网络扩展配置才能使用隧道功能")
                 .font(字体层级.正文)
                 .foregroundColor(.次要文字)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 间距常量.宽松)
 
-            AppButton("安装配置文件", 样式: .主要) {
-                Task { @MainActor in
-                    await 环境.reload()
-                }
+            if let 错误 {
+                Text(错误)
+                    .font(字体层级.辅助说明)
+                    .foregroundColor(.危险色)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 间距常量.宽松)
+            }
+
+            AppButton("安装 VPN 配置", 样式: .主要, 加载中: 安装中) {
+                安装配置()
             }
             .padding(.horizontal, 间距常量.宽松)
 
@@ -110,5 +120,22 @@ private struct 配置安装引导视图: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.页面背景)
+    }
+
+    /// 安装 VPN 网络扩展配置
+    private func 安装配置() {
+        错误 = nil
+        安装中 = true
+        Task { @MainActor in
+            defer { 安装中 = false }
+            do {
+                // 调用官方安装方法，创建 NETunnelProviderManager 配置
+                try await ExtensionProfile.install()
+                // 安装成功后重新加载
+                await 环境.reload()
+            } catch {
+                错误 = error.localizedDescription
+            }
+        }
     }
 }
