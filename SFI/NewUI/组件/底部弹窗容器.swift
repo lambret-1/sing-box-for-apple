@@ -112,10 +112,10 @@ private struct 设置与功能页面视图: View {
                     Spacer()
                 }
                 HStack(spacing: 0) {
-                    功能导航项(图标: "network", 标题: "DNS", 目标: DNS设置页面())
-                    功能导航项(图标: "lock.slash", 标题: "MITM", 目标: MITM设置页面())
-                    功能导航项(图标: "waveform.badge.magnifyingglass", 标题: "抓包", 目标: 抓包列表页面())
-                    功能导航项(图标: "pencil.and.ellipsis.rectangle", 标题: "重写", 目标: 重写规则设置页面())
+                    功能导航项(图标: "network", 标题: "DNS", 目标视图: DNS设置页面())
+                    功能导航项(图标: "lock.slash", 标题: "MITM", 目标视图: MITM设置页面())
+                    功能导航项(图标: "waveform.badge.magnifyingglass", 标题: "抓包", 目标视图: 抓包列表页面())
+                    功能导航项(图标: "pencil.and.ellipsis.rectangle", 标题: "重写", 目标视图: 重写规则设置页面())
                 }
                 .padding(.horizontal, 8)
                 .padding(.bottom, 8)
@@ -126,14 +126,14 @@ private struct 设置与功能页面视图: View {
 }
 
 /// 功能页面导航项（图标 + 标题，NavigationLink）
-private struct 功能导航项<目标: View>: View {
+private struct 功能导航项<目标类型: View>: View {
     let 图标: String
     let 标题: String
-    let 目标: 目标
+    let 目标视图: 目标类型
 
     var body: some View {
         NavigationLink {
-            目标
+            目标视图
         } label: {
             VStack(spacing: 4) {
                 Image(systemName: 图标)
