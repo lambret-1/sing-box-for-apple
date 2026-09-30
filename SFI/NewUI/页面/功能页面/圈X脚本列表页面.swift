@@ -132,7 +132,7 @@ struct 圈X脚本编辑页面: View {
                     TextEditor(text: $脚本.代码)
                         .font(.system(.body, design: .monospaced))
                         .frame(minHeight: 200)
-                        .overlay(RoundedRectangle(cornerRadius: 圆角常量.小).stroke(.分割线, lineWidth: 1))
+                        .overlay(RoundedRectangle(cornerRadius: 圆角常量.小).stroke(Color.分割线, lineWidth: 1))
                 }
                 Section("高级选项") {
                     Toggle("需要请求/响应体", isOn: $脚本.需要请求体)
