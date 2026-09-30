@@ -138,6 +138,33 @@ private struct 配置管理视图: View {
                             }
                         }
                     }
+
+                    // MARK: 功能页面导航入口
+                    Section("功能页面") {
+                        NavigationLink {
+                            DNS设置页面()
+                        } label: {
+                            功能页面行(图标: "network", 标题: "DNS 设置", 说明: "自定义 DNS 服务器与查询统计")
+                        }
+
+                        NavigationLink {
+                            MITM设置页面()
+                        } label: {
+                            功能页面行(图标: "lock.slash", 标题: "MITM 解密", 说明: "HTTPS 中间人解密与证书管理")
+                        }
+
+                        NavigationLink {
+                            抓包列表页面()
+                        } label: {
+                            功能页面行(图标: "waveform.badge.magnifyingglass", 标题: "HTTP 抓包", 说明: "实时捕获与查看 HTTP 请求")
+                        }
+
+                        NavigationLink {
+                            重写规则设置页面()
+                        } label: {
+                            功能页面行(图标: "pencil.and.ellipsis.rectangle", 标题: "重写规则", 说明: "请求 / 响应 URL 重写规则")
+                        }
+                    }
                 }
                 .listStyle(.insetGrouped)
             }
@@ -221,7 +248,36 @@ private extension ProfilePreview {
     }
 }
 
-// MARK: - 关于
+// MARK: - 功能页面导航行
+
+/// 功能页面导航行：图标 + 标题 + 说明，用于 NavigationLink 标签
+private struct 功能页面行: View {
+    /// SF Symbols 图标
+    let 图标: String
+    /// 标题
+    let 标题: String
+    /// 说明
+    let 说明: String
+
+    var body: some View {
+        HStack(spacing: 间距常量.中等) {
+            Image(systemName: 图标)
+                .foregroundColor(.主题色)
+                .frame(width: 24)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(标题)
+                    .font(字体层级.正文)
+                    .foregroundColor(.primary)
+                Text(说明)
+                    .font(字体层级.辅助说明)
+                    .foregroundColor(.次要文字)
+            }
+        }
+        .padding(.vertical, 间距常量.紧凑 / 2)
+    }
+}
+
+// MARK: - 关于行（弹窗内使用）
 
 /// 关于视图：应用图标、版本号、构建号、开源仓库、Libbox 版本
 private struct 关于视图: View {
