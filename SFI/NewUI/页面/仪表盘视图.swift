@@ -19,6 +19,8 @@ struct 仪表盘视图: View {
     @EnvironmentObject private var 状态: 新UI状态
     /// 官方扩展环境（供 ProfileCard 使用）
     @EnvironmentObject private var 环境: ExtensionEnvironments
+    /// 是否显示 VLESS 转换器全屏页
+    @State private var 显示VLESS转换器 = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -29,6 +31,11 @@ struct 仪表盘视图: View {
 
             // 横向功能卡片栏（固定）
             顶部功能卡片栏()
+
+            // 工具入口条：VLESS 转换器
+            工具入口条
+                .padding(.horizontal, 间距常量.标准)
+                .padding(.bottom, 间距常量.紧凑)
 
             // 内容区：占满剩余高度
             // 日志页不使用 ScrollView，让官方 LogView 占满剩余空间延伸到底部
@@ -62,10 +69,70 @@ struct 仪表盘视图: View {
         .底部弹窗(弹窗类型: $状态.当前底部弹窗)
         .运行模式面板(显示: $状态.显示运行模式面板)
         .错误提示(信息: 状态.错误信息)
+        .fullScreenCover(isPresented: $显示VLESS转换器) {
+            VLESS转换器页面()
+        }
         .onAppear {
             // 加载配置列表
             Task { await 状态.加载配置列表() }
         }
+    }
+}
+
+// MARK: - 工具入口条
+
+extension 仪表盘视图 {
+    /// 工具入口条：一排小工具按钮，目前包含 VLESS 转换器
+    var 工具入口条: some View {
+        HStack(spacing: 间距常量.紧凑) {
+            工具入口按钮(
+                图标: "arrow.triangle.2.circlepath",
+                标题: "VLESS 转换",
+                副标题: "链接转 JSON"
+            ) {
+                显示VLESS转换器 = true
+            }
+            Spacer()
+        }
+    }
+}
+
+/// 单个工具入口按钮
+private struct 工具入口按钮: View {
+    let 图标: String
+    let 标题: String
+    let 副标题: String
+    let 动作: () -> Void
+
+    var body: some View {
+        Button(action: 动作) {
+            HStack(spacing: 间距常量.紧凑) {
+                Image(systemName: 图标)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.主题色)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(标题)
+                        .font(字体层级.正文)
+                        .foregroundColor(.primary)
+                    Text(副标题)
+                        .font(字体层级.辅助说明)
+                        .foregroundColor(.次要文字)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.次要文字)
+            }
+            .padding(.horizontal, 间距常量.中等)
+            .padding(.vertical, 间距常量.紧凑)
+            .background(Color.卡片背景)
+            .clipShape(RoundedRectangle(cornerRadius: 圆角常量.标准))
+            .overlay(
+                RoundedRectangle(cornerRadius: 圆角常量.标准)
+                    .stroke(Color.分割线, lineWidth: 0.5)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 }
 
