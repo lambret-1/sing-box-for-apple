@@ -68,11 +68,18 @@ final class CACertificate生成器 {
             throw 证书生成错误.私钥导出失败
         }
 
-        // 5. 构建 P12 替代格式：私钥 DER + 证书 DER 拼接
-        // 内核侧用 OpenSSL 解析为单独的 key + cert
-        var p12Data = Data()
-        p12Data.append(私钥DER)
-        p12Data.append(crtData)
+        // 5. 构建 PEM 格式（证书 PEM + 私钥 PEM 拼接）
+        // 内核 fork 版本支持 PEM 格式解析
+        let 证书PEM = "-----BEGIN CERTIFICATE-----\n" +
+            crtData.base64EncodedString(options: .lineLength64Characters) +
+            "\n-----END CERTIFICATE-----\n"
+
+        let 私钥PEM = "-----BEGIN RSA PRIVATE KEY-----\n" +
+            私钥DER.base64EncodedString(options: .lineLength64Characters) +
+            "\n-----END RSA PRIVATE KEY-----\n"
+
+        let combinedPEM = 证书PEM + 私钥PEM
+        let p12Data = combinedPEM.data(using: .utf8) ?? Data()
 
         // 6. 持久化到文件
         try 保存到文件(p12Data: p12Data, crtData: crtData, 私钥DER: 私钥DER)

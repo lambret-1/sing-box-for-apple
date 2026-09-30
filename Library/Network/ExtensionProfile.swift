@@ -378,17 +378,18 @@ public class ExtensionProfile: ObservableObject {
             "print": 共享默认.bool(forKey: "mitm_capture_enabled")
         ]
 
-        // TLS 解密配置
-        var tlsDecryption: [String: Any] = [
-            "enabled": true,
-            "key_password": ""
-        ]
-
+        // TLS 解密配置（仅当有证书时才启用）
         if !p12Base64.isEmpty {
-            tlsDecryption["key_pair_p12"] = p12Base64
+            let tlsDecryption: [String: Any] = [
+                "enabled": true,
+                "key_pair_p12": p12Base64,
+                "key_password": ""
+            ]
+            mitmConfig["tls_decryption"] = tlsDecryption
+        } else {
+            // 没有证书时不启用 TLS 解密，避免内核报错
+            mitmConfig["tls_decryption"] = ["enabled": false]
         }
-
-        mitmConfig["tls_decryption"] = tlsDecryption
 
         // 注入到配置顶层
         配置字典["mitm"] = mitmConfig
