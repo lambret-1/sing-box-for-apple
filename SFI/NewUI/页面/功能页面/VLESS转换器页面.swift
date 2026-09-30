@@ -189,7 +189,7 @@ struct VLESS转换器页面: View {
                     .padding(.vertical, 间距常量.宽松)
             } else {
                 ForEach(状态.筛选后的列表) { 项 in
-                    节点卡片(
+                    VLESS节点卡片(
                         状态: 状态,
                         项: 项,
                         展开: Binding(

@@ -8,7 +8,7 @@
 import SwiftUI
 
 /// VLESS 节点卡片
-struct 节点卡片: View {
+struct VLESS节点卡片: View {
     /// 转换器全局状态
     @ObservedObject var 状态: VLESS转换器状态
     /// 当前节点项
