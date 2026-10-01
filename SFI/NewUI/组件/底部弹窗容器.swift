@@ -99,60 +99,9 @@ private struct 设置与功能页面视图: View {
         VStack(spacing: 0) {
             SettingView()
                 .layoutPriority(1)
-
-            // 功能页面入口区域
-            VStack(spacing: 0) {
-                Divider()
-                HStack {
-                    Text("功能页面")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.次要文字)
-                        .padding(.horizontal, 16)
-                        .padding(.top, 8)
-                    Spacer()
-                }
-                HStack(spacing: 0) {
-                    功能导航项(图标: "network", 标题: "DNS", 目标视图: DNS设置页面())
-                    功能导航项(图标: "lock.slash", 标题: "MITM", 目标视图: MITM设置页面())
-                    功能导航项(图标: "waveform.badge.magnifyingglass", 标题: "抓包", 目标视图: 抓包列表页面())
-                    功能导航项(图标: "pencil.and.ellipsis.rectangle", 标题: "重写", 目标视图: 重写规则设置页面())
-                }
-                .padding(.horizontal, 8)
-                .padding(.bottom, 8)
-            }
-            .background(Color.页面背景)
         }
     }
 }
-
-/// 功能页面导航项（图标 + 标题，NavigationLink）
-private struct 功能导航项<目标类型: View>: View {
-    let 图标: String
-    let 标题: String
-    let 目标视图: 目标类型
-
-    var body: some View {
-        NavigationLink {
-            目标视图
-        } label: {
-            VStack(spacing: 4) {
-                Image(systemName: 图标)
-                    .font(.system(size: 18))
-                    .foregroundColor(.主题色)
-                    .frame(width: 36, height: 36)
-                    .background(Color.主题色.opacity(0.12))
-                    .cornerRadius(10)
-                Text(标题)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.primary)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 6)
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-}
-
 
 // MARK: - 关于行（弹窗内使用）
 
