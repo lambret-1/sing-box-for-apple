@@ -125,6 +125,9 @@ struct MITM设置页面: View {
 
             // MARK: 证书操作
             Section("证书操作") {
+                证书操作行(图标: "key.fill", 标题: "生成 CA 证书", 说明: "生成 RSA 2048 根证书（每个用户独立）") {
+                    生成证书()
+                }
                 证书操作行(图标: "square.and.arrow.up", 标题: "导出证书", 说明: "导出 .mobileconfig 描述文件供安装") {
                     导出证书()
                 }
@@ -318,6 +321,18 @@ struct MITM设置页面: View {
     }
 
     // MARK: - 方法
+
+    /// 生成 CA 证书（如已存在则覆盖）
+    private func 生成证书() {
+        do {
+            try mitm.重新生成证书()
+            mitm.证书生成错误 = nil
+            提示 = "CA 证书生成成功"
+        } catch {
+            mitm.证书生成错误 = error.localizedDescription
+            提示 = "证书生成失败：\(error.localizedDescription)"
+        }
+    }
 
     /// 导出证书（生成 mobileconfig 并弹出文档导出器）
     private func 导出证书() {

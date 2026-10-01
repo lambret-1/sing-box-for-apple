@@ -218,7 +218,7 @@ final class CACertificate生成器 {
 
     private func 构建有效期(年数: Int) -> Data {
         let 日期格式化 = DateFormatter()
-        日期格式化.dateFormat = "yyMMddHHmmss"
+        日期格式化.dateFormat = "yyMMddHHmmss'Z'"
         日期格式化.timeZone = TimeZone(identifier: "UTC")
 
         let 现在字符串 = 日期格式化.string(from: Date())
