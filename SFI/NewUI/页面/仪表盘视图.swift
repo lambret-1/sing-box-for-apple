@@ -159,7 +159,8 @@ private struct 主内容区: View {
         Group {
             switch 状态.当前顶部卡片 {
             case .节点:
-                节点内容区()
+                // 节点页仅保留配置区显示，内容区已移除
+                EmptyView()
             case .策略组:
                 策略组内容区()
             case .网络活动:
