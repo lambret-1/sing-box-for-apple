@@ -58,60 +58,58 @@ private struct LogViewContent: View {
     }
 
     #if !os(tvOS)
-        private var searchableContent: some View {
-            LogContentInnerView(dataModel: viewModel.dataModel, viewModel: viewModel)
-                .applySearchable(text: $viewModel.searchText, isSearching: $viewModel.isSearching, shouldShow: viewModel.isSearching)
-        }
+        /// 自定义搜索栏：搜索输入框 + 右侧暂停/恢复按钮 + 日志菜单按钮
+        /// 按钮内嵌在搜索框内居右，搜索与按钮互不干扰
+        private var 自定义搜索栏: some View {
+            HStack(spacing: 8) {
+                // 搜索图标
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(.secondary)
+                    .font(.system(size: 16))
 
-        /// The iOS 15 fallback must be excluded from macOS builds entirely: with
-        /// `if #available(iOS 16.0, *)` the else branch is compile-time dead on macOS,
-        /// where the compiler permits unavailable declarations, so the Xcode 27 SDK
-        /// resolved the HStack's ViewBuilder.buildBlock to the macOS 26-only
-        /// `TupleContent` overload. That type still lands in this view's `Body`
-        /// associated type witness, and demangling it aborts on macOS < 26
-        /// (TestFlight crash in swift_getAssociatedTypeWitness).
-        @ViewBuilder
-        private var contentWithToolbar: some View {
-            #if os(iOS)
-                if #available(iOS 16.0, *) {
-                    groupedToolbarContent
-                } else {
-                    // iOS 15 renders only one trailing toolbar entry; group all buttons into a single item
-                    searchableContent.toolbar {
-                        ToolbarItem {
-                            HStack {
-                                toolbarButtons
-                                logMenu
-                            }
-                        }
+                // 搜索输入框（占据剩余空间）
+                TextField(NSLocalizedString("Search", comment: "Search logs"), text: $viewModel.searchText)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 15))
+
+                // 清除按钮（搜索文本非空时显示）
+                if !viewModel.searchText.isEmpty {
+                    Button {
+                        viewModel.searchText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                            .font(.system(size: 16))
                     }
+                    .buttonStyle(.plain)
                 }
-            #else
-                groupedToolbarContent
-            #endif
+
+                // 暂停/恢复按钮
+                Button(action: viewModel.togglePause) {
+                    Image(systemName: viewModel.isPaused ? "play.circle" : "pause.circle")
+                        .foregroundColor(.primary)
+                        .font(.system(size: 18))
+                }
+                .buttonStyle(.plain)
+                .help(viewModel.isPaused ? NSLocalizedString("Resume", comment: "Resume log auto-scroll") : NSLocalizedString("Pause", comment: "Pause log auto-scroll"))
+
+                // 日志菜单按钮（日志级别/保存/清空/远程控制）
+                logMenu
+                    .fixedSize()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color(.secondarySystemBackground))
+            .cornerRadius(10)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
         }
 
-        private var groupedToolbarContent: some View {
-            searchableContent.toolbar {
-                ToolbarItemGroup {
-                    toolbarButtons
-                    logMenu
-                }
-            }
-        }
-
-        @ViewBuilder
-        private var toolbarButtons: some View {
-            if #available(iOS 17.0, macOS 14.0, *) {
-                Button(action: viewModel.toggleSearch) {
-                    Label("Search", systemImage: "magnifyingglass")
-                }
-            }
-            Button(action: viewModel.togglePause) {
-                Label(
-                    viewModel.isPaused ? NSLocalizedString("Resume", comment: "Resume log auto-scroll") : NSLocalizedString("Pause", comment: "Pause log auto-scroll"),
-                    systemImage: viewModel.isPaused ? "play.circle" : "pause.circle"
-                )
+        /// 内容布局：顶部自定义搜索栏 + 下方日志内容
+        private var contentWithToolbar: some View {
+            VStack(spacing: 0) {
+                自定义搜索栏
+                LogContentInnerView(dataModel: viewModel.dataModel, viewModel: viewModel)
             }
         }
 
