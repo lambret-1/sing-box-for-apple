@@ -371,11 +371,10 @@ public class ExtensionProfile: ObservableObject {
         let http2Enabled = 共享默认.bool(forKey: "mitm_http2_enabled")
         let p12Base64 = 共享默认.string(forKey: "mitm_p12_base64") ?? ""
 
-        // 构建 MITM 配置
+        // 构建 MITM 全局配置（注意：print 是路由规则 mitm 选项的字段，不属于全局配置）
         var mitmConfig: [String: Any] = [
             "enabled": true,
-            "http2_enabled": http2Enabled,
-            "print": 共享默认.bool(forKey: "mitm_capture_enabled")
+            "http2_enabled": http2Enabled
         ]
 
         // TLS 解密配置（仅当有证书时才启用）

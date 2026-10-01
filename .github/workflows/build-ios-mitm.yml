@@ -30,7 +30,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: Libbox.xcframework
-          key: libbox-stable-v1
+          key: libbox-volitios-mitm-gvisor-v1
 
       - name: 安装 Go 环境（仅缓存未命中时）
         if: steps.cache-libbox.outputs.cache-hit != 'true'
@@ -51,14 +51,13 @@ jobs:
         if: steps.cache-libbox.outputs.cache-hit != 'true'
         run: |
           echo "缓存未命中，编译 Libbox.xcframework..."
-          # 使用 SagerNet/sing-box testing 分支（稳定版内核，MITM UI 已内置待内核移植）
-          git clone --depth 1 --branch testing https://github.com/SagerNet/sing-box.git sing-box-src
+          # 使用 lambret-1/sing-box-mitm dev-mitm 分支（VolitiOS MITM 内核，支持 PEM 证书）
+          git clone --depth 1 --branch dev-mitm https://github.com/lambret-1/sing-box-mitm.git sing-box-src
           cd sing-box-src
-          # 注入 with_gvisor 标签
-          sed -i '' 's/darwinTags = append(darwinTags, "with_dhcp", "grpcnotrace")/darwinTags = append(darwinTags, "with_dhcp", "grpcnotrace", "with_gvisor")/' cmd/internal/build_libbox/main.go
-          echo "已注入 with_gvisor 标签："
-          grep "darwinTags = append" cmd/internal/build_libbox/main.go
+          # 通过 GOFLAGS 传递 with_gvisor 编译标签
           export PATH=$PATH:$(go env GOPATH)/bin
+          export GOFLAGS="-tags=with_gvisor"
+          echo "GOFLAGS: $GOFLAGS"
           go run ./cmd/internal/build_libbox -target apple
           LIBBOX_PATH=$(find . -name "Libbox.xcframework" -type d | head -1)
           if [ -z "$LIBBOX_PATH" ]; then
@@ -67,14 +66,14 @@ jobs:
           fi
           cp -R "$LIBBOX_PATH" ../
           cd ..
-          echo "Libbox.xcframework 编译完成（稳定版内核）"
+          echo "Libbox.xcframework 编译完成（VolitiOS MITM 内核 + gVisor）"
 
       - name: 保存 Libbox 缓存（编译成功后立即保存）
         if: steps.cache-libbox.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: Libbox.xcframework
-          key: libbox-stable-v1
+          key: libbox-volitios-mitm-gvisor-v1
 
       - name: 使用缓存的 Libbox.xcframework
         if: steps.cache-libbox.outputs.cache-hit == 'true'
