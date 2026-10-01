@@ -393,6 +393,10 @@ public class ExtensionProfile: ObservableObject {
         // 注入到配置顶层
         配置字典["mitm"] = mitmConfig
 
+        // 注入 MITM 路由触发规则（匹配 HTTP/HTTPS 端口，action=route-options）
+        // 没有此规则则 MITM 引擎启动但不处理任何流量
+        Self.注入MITM路由规则(到: &配置字典, 抓包启用: 共享默认.bool(forKey: "mitm_capture_enabled"))
+
         // 序列化回 JSON
         do {
             let 新数据 = try JSONSerialization.data(withJSONObject: 配置字典, options: [.sortedKeys, .prettyPrinted])
@@ -401,5 +405,36 @@ public class ExtensionProfile: ObservableObject {
             logger.error("MITM 配置注入失败：序列化错误 \(error.localizedDescription)")
             return config
         }
+    }
+
+    /// 向配置的 route.rules 中注入 MITM 触发规则
+    /// - Parameters:
+    ///   - 配置字典: 配置字典引用
+    ///   - 抓包启用: 是否启用抓包日志输出（print 字段）
+    private static func 注入MITM路由规则(到 配置字典: inout [String: Any], 抓包启用: Bool) {
+        // 构建 MITM 触发规则：匹配 80/443 端口，走 route-options + mitm
+        let mitm规则: [String: Any] = [
+            "port": [80, 443],
+            "action": "route-options",
+            "mitm": [
+                "enabled": true,
+                "print": 抓包启用
+            ]
+        ]
+
+        // 获取或创建 route 字典
+        var route字典 = 配置字典["route"] as? [String: Any] ?? [:]
+
+        // 获取现有规则列表
+        var 规则列表 = route字典["rules"] as? [[String: Any]] ?? []
+
+        // 将 MITM 规则插入到最前面（优先匹配）
+        规则列表.insert(mitm规则, at: 0)
+
+        // 写回 route 字典
+        route字典["rules"] = 规则列表
+        配置字典["route"] = route字典
+
+        logger.info("MITM 路由规则已注入（匹配端口 80/443，规则总数：\(规则列表.count)）")
     }
 }
