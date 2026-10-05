@@ -308,6 +308,23 @@ jobs:
           rm -rf sfi/Libbox.xcframework
           cp -R sing-box-core/Libbox.xcframework sfi/Libbox.xcframework
 
+      - name: 切换到 Xcode 26（支持iOS26 API）
+        run: |
+          echo "=== 可用Xcode版本 ==="
+          ls -la /Applications/ | grep Xcode
+          echo "=== 当前Xcode版本 ==="
+          xcodebuild -version
+          echo "=== 尝试切换到Xcode 26 ==="
+          if [ -d "/Applications/Xcode_26.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_26.app
+            echo "✅ 已切换到Xcode 26"
+          elif [ -d "/Applications/Xcode.app" ]; then
+            echo "⚠️ Xcode_26.app不存在，使用默认Xcode"
+          else
+            echo "❌ 未找到Xcode"
+          fi
+          xcodebuild -version
+
       - name: 解析 Swift 包依赖
         working-directory: sfi
         run: |
