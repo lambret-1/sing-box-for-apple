@@ -324,44 +324,12 @@ jobs:
           GHOSTTY_FILE="build/DerivedData/SourcePackages/checkouts/libghostty-spm/Sources/GhosttyTerminal/Platform/UIKit/InputAccessory/TerminalInputAccessoryView.swift"
           if [ -f "$GHOSTTY_FILE" ]; then
             echo "✅ 找到libghostty-spm源码，开始修复UIGlassEffect"
-            # 将makeBarEffect方法中的UIGlassEffect替换为UIBlurEffect
-            python3 -c "
-import re
-with open('$GHOSTTY_FILE', 'r') as f:
-    content = f.read()
-# 替换makeBarEffect方法，直接返回UIBlurEffect
-old_method = '''    private func makeBarEffect() -> UIVisualEffect {
-        // visionOS windows are glass already and the SDK has no
-        // \`UIGlassEffect\`; the blur is the bar's chrome there.
-        #if !os(visionOS)
-        if #available(iOS 26, *) {
-            let effect = UIGlassEffect(style: .regular)
-            effect.isInteractive = true
-            return effect
-        }
-        #endif
-        return UIBlurEffect(style: .systemUltraThinMaterial)
-    }'''
-new_method = '''    private func makeBarEffect() -> UIVisualEffect {
-        // 修复：UIGlassEffect是iOS26+ API，CI环境Xcode16不支持
-        // 统一使用UIBlurEffect兼容iOS16+
-        return UIBlurEffect(style: .systemUltraThinMaterial)
-    }'''
-if old_method in content:
-    content = content.replace(old_method, new_method)
-    with open('$GHOSTTY_FILE', 'w') as f:
-        f.write(content)
-    print('✅ UIGlassEffect已替换为UIBlurEffect')
-else:
-    print('⚠️ 未找到预期的makeBarEffect方法，尝试通用替换')
-    # 通用替换：将UIGlassEffect相关代码注释掉
-    content = re.sub(r'let effect = UIGlassEffect\(style: \.regular\)', 'let effect = UIBlurEffect(style: .systemUltraThinMaterial)', content)
-    content = re.sub(r'effect\.isInteractive = true', '// effect.isInteractive = true // iOS26+ API', content)
-    with open('$GHOSTTY_FILE', 'w') as f:
-        f.write(content)
-    print('✅ 通用替换完成')
-"
-            echo "✅ libghostty-spm修复完成"
+            # 将UIGlassEffect替换为UIBlurEffect
+            sed -i '' 's/let effect = UIGlassEffect(style: .regular)/let effect = UIBlurEffect(style: .systemUltraThinMaterial)/g' "$GHOSTTY_FILE"
+            # 注释掉isInteractive（iOS26+ API）
+            sed -i '' 's/effect.isInteractive = true/\/\/ effect.isInteractive = true \/\/ iOS26+ API/g' "$GHOSTTY_FILE"
+            echo "✅ UIGlassEffect已替换为UIBlurEffect"
+            grep -n "UIBlurEffect\|UIGlassEffect" "$GHOSTTY_FILE" | head -5
           else
             echo "⚠️ 未找到libghostty-spm源码文件"
           fi
