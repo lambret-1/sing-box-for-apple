@@ -228,7 +228,7 @@ jobs:
       always() &&
       needs.quick-check.result == 'success' &&
       needs.swiftlint.result == 'success'
-    runs-on: macos-16
+    runs-on: macos-15
     timeout-minutes: 30
     steps:
       - name: 检出 SFI 代码
@@ -308,23 +308,6 @@ jobs:
           rm -rf sfi/Libbox.xcframework
           cp -R sing-box-core/Libbox.xcframework sfi/Libbox.xcframework
 
-      - name: 切换到 Xcode 26（支持iOS26 API）
-        run: |
-          echo "=== 可用Xcode版本 ==="
-          ls -la /Applications/ | grep Xcode
-          echo "=== 当前Xcode版本 ==="
-          xcodebuild -version
-          echo "=== 尝试切换到Xcode 26 ==="
-          if [ -d "/Applications/Xcode_26.app" ]; then
-            sudo xcode-select -s /Applications/Xcode_26.app
-            echo "✅ 已切换到Xcode 26"
-          elif [ -d "/Applications/Xcode.app" ]; then
-            echo "⚠️ Xcode_26.app不存在，使用默认Xcode"
-          else
-            echo "❌ 未找到Xcode"
-          fi
-          xcodebuild -version
-
       - name: 解析 Swift 包依赖
         working-directory: sfi
         run: |
@@ -334,6 +317,54 @@ jobs:
             -scheme "${{ env.XCODE_SCHEME }}" \
             -resolvePackageDependencies 2>&1 | tail -20
           echo "✅ 包依赖解析完成"
+
+      - name: 修复libghostty-spm的UIGlassEffect兼容性（iOS16+）
+        working-directory: sfi
+        run: |
+          GHOSTTY_FILE="build/DerivedData/SourcePackages/checkouts/libghostty-spm/Sources/GhosttyTerminal/Platform/UIKit/InputAccessory/TerminalInputAccessoryView.swift"
+          if [ -f "$GHOSTTY_FILE" ]; then
+            echo "✅ 找到libghostty-spm源码，开始修复UIGlassEffect"
+            # 将makeBarEffect方法中的UIGlassEffect替换为UIBlurEffect
+            python3 -c "
+import re
+with open('$GHOSTTY_FILE', 'r') as f:
+    content = f.read()
+# 替换makeBarEffect方法，直接返回UIBlurEffect
+old_method = '''    private func makeBarEffect() -> UIVisualEffect {
+        // visionOS windows are glass already and the SDK has no
+        // \`UIGlassEffect\`; the blur is the bar's chrome there.
+        #if !os(visionOS)
+        if #available(iOS 26, *) {
+            let effect = UIGlassEffect(style: .regular)
+            effect.isInteractive = true
+            return effect
+        }
+        #endif
+        return UIBlurEffect(style: .systemUltraThinMaterial)
+    }'''
+new_method = '''    private func makeBarEffect() -> UIVisualEffect {
+        // 修复：UIGlassEffect是iOS26+ API，CI环境Xcode16不支持
+        // 统一使用UIBlurEffect兼容iOS16+
+        return UIBlurEffect(style: .systemUltraThinMaterial)
+    }'''
+if old_method in content:
+    content = content.replace(old_method, new_method)
+    with open('$GHOSTTY_FILE', 'w') as f:
+        f.write(content)
+    print('✅ UIGlassEffect已替换为UIBlurEffect')
+else:
+    print('⚠️ 未找到预期的makeBarEffect方法，尝试通用替换')
+    # 通用替换：将UIGlassEffect相关代码注释掉
+    content = re.sub(r'let effect = UIGlassEffect\(style: \.regular\)', 'let effect = UIBlurEffect(style: .systemUltraThinMaterial)', content)
+    content = re.sub(r'effect\.isInteractive = true', '// effect.isInteractive = true // iOS26+ API', content)
+    with open('$GHOSTTY_FILE', 'w') as f:
+        f.write(content)
+    print('✅ 通用替换完成')
+"
+            echo "✅ libghostty-spm修复完成"
+          else
+            echo "⚠️ 未找到libghostty-spm源码文件"
+          fi
 
       - name: 构建 SFI iOS App
         working-directory: sfi
