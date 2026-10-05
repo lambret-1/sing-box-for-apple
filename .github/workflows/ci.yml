@@ -1,0 +1,523 @@
+name: SFI CI 全流程（门禁检查 + iOS 构建）
+
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    branches: [dev]
+  workflow_dispatch:
+
+concurrency:
+  group: sfi-ci-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: read
+
+env:
+  GO_VERSION: "1.25.5"
+  XCODE_SCHEME: "SFI"
+  BUILD_CONFIGURATION: "Release"
+  DERIVED_DATA_PATH: "build/DerivedData"
+
+jobs:
+  # ========== 第一阶段：快速门禁检查（并行，Linux）==========
+  quick-check:
+    name: 静态检查
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 检查冲突标记
+        if: always()
+        run: |
+          if grep -rnE '^(<<<<<<<|=======|>>>>>>>)' \
+            --include='*.swift' --include='*.plist' \
+            --include='*.pbxproj' --include='*.yml' \
+            --include='*.yaml' --include='*.json' \
+            --include='*.md' . 2>/dev/null; then
+            echo "❌ 发现未解决的冲突标记" | tee -a quick_errors.log
+            echo "❌ 检查冲突标记 | 发现未解决的冲突标记" >> quick_summary.log
+            exit 1
+          fi
+          echo "✅ 检查冲突标记 | 无冲突标记" >> quick_summary.log
+
+      - name: 检查 Info.plist 语法
+        if: always()
+        run: |
+          FOUND=0
+          ERRORS=""
+          while IFS= read -r -d '' f; do
+            FOUND=1
+            if ! python3 -c "import plistlib,sys; plistlib.load(open(sys.argv[1],'rb'))" "$f" 2>/dev/null; then
+              echo "❌ plist 语法错误: $f" | tee -a quick_errors.log
+              ERRORS="${ERRORS}${f} "
+            fi
+          done < <(find . -name 'Info.plist' -not -path './.git/*' -print0)
+          if [ "$FOUND" -eq 0 ]; then
+            echo "⚠️ 检查 Info.plist 语法 | 未找到文件" >> quick_summary.log
+          elif [ -n "$ERRORS" ]; then
+            echo "❌ 检查 Info.plist 语法 | 语法错误: $ERRORS" >> quick_summary.log
+            exit 1
+          else
+            echo "✅ 检查 Info.plist 语法 | 所有文件合法" >> quick_summary.log
+          fi
+
+      - name: 检查意外提交的文件
+        if: always()
+        run: |
+          PATTERNS='\.DS_Store$|xcuserdata/|DerivedData/|\.swiftpm/|__pycache__/|\.pyc$'
+          FOUND=$(git ls-files | grep -E "$PATTERNS" || true)
+          if [ -n "$FOUND" ]; then
+            echo "❌ 发现不应提交的文件：" | tee -a quick_errors.log
+            echo "$FOUND" | tee -a quick_errors.log
+            echo "❌ 检查意外提交的文件 | 发现不应提交的文件" >> quick_summary.log
+            exit 1
+          fi
+          echo "✅ 检查意外提交的文件 | 无异常文件" >> quick_summary.log
+
+      - name: 检查 pbxproj 有效性
+        if: always()
+        run: |
+          FOUND=0
+          ERRORS=""
+          while IFS= read -r -d '' f; do
+            FOUND=1
+            open_count=$(tr -cd '{' < "$f" | wc -c)
+            close_count=$(tr -cd '}' < "$f" | wc -c)
+            if [ "$open_count" -ne "$close_count" ]; then
+              echo "❌ pbxproj 大括号不匹配: $f" | tee -a quick_errors.log
+              ERRORS="${ERRORS}${f} "
+            fi
+            if ! grep -q 'rootObject' "$f"; then
+              echo "❌ pbxproj 缺少 rootObject: $f" | tee -a quick_errors.log
+              ERRORS="${ERRORS}${f} "
+            fi
+          done < <(find . -name 'project.pbxproj' -not -path './.git/*' -print0)
+          if [ "$FOUND" -eq 0 ]; then
+            echo "⚠️ 检查 pbxproj 有效性 | 未找到文件" >> quick_summary.log
+          elif [ -n "$ERRORS" ]; then
+            echo "❌ 检查 pbxproj 有效性 | 存在无效文件" >> quick_summary.log
+            exit 1
+          else
+            echo "✅ 检查 pbxproj 有效性 | 结构完整" >> quick_summary.log
+          fi
+
+      - name: 检查 entitlements
+        if: always()
+        run: |
+          ENT_FILES=$(find . -name '*.entitlements' -not -path './.git/*' -not -path './Frameworks/*')
+          if [ -z "$ENT_FILES" ]; then
+            echo "⚠️ 检查 entitlements | 未找到文件" >> quick_summary.log
+            exit 0
+          fi
+          FOUND_NETEXT=0
+          while IFS= read -r ENT; do
+            if grep -q 'com.apple.developer.networking.networkextension' "$ENT"; then
+              FOUND_NETEXT=1
+            fi
+            if grep -qE 'get-task-allow.*true' "$ENT"; then
+              echo "❌ entitlements 包含 get-task-allow=true: $ENT" | tee -a quick_errors.log
+              echo "❌ 检查 entitlements | 包含调试权限 get-task-allow=true" >> quick_summary.log
+              exit 1
+            fi
+          done <<< "$ENT_FILES"
+          if [ "$FOUND_NETEXT" -eq 0 ]; then
+            echo "❌ 缺少关键权限: com.apple.developer.networking.networkextension" | tee -a quick_errors.log
+            echo "❌ 检查 entitlements | 缺少网络扩展权限" >> quick_summary.log
+            exit 1
+          fi
+          echo "✅ 检查 entitlements | 权限配置正确" >> quick_summary.log
+
+      - name: 检查大文件
+        if: always()
+        run: |
+          BIG=$(find . -type f -size +5M -not -path './.git/*' -not -path './build/*' | head -20)
+          if [ -n "$BIG" ]; then
+            echo "❌ 发现大文件（>5MB）：" | tee -a quick_errors.log
+            echo "$BIG" | tee -a quick_errors.log
+            echo "❌ 检查大文件 | 发现超过 5MB 的文件" >> quick_summary.log
+            exit 1
+          fi
+          echo "✅ 检查大文件 | 无超过 5MB 的文件" >> quick_summary.log
+
+      - name: 检查硬编码密钥
+        if: always()
+        run: |
+          if grep -rniE \
+            'BEGIN (RSA|EC|OPENSSH|DSA) PRIVATE KEY|api[_-]?key\s*[:=]\s*["'"'"'][A-Za-z0-9_\-]{16,}|secret\s*[:=]\s*["'"'"'][A-Za-z0-9_\-]{16,}' \
+            --include='*.swift' --include='*.plist' --include='*.json' \
+            --include='*.yml' --include='*.yaml' --include='*.sh' . 2>/dev/null; then
+            echo "❌ 疑似硬编码密钥" | tee -a quick_errors.log
+            echo "❌ 检查硬编码密钥 | 发现疑似密钥" >> quick_summary.log
+            exit 1
+          fi
+          echo "✅ 检查硬编码密钥 | 无硬编码密钥" >> quick_summary.log
+
+      - name: 检查空白错误
+        if: always()
+        env:
+          BASE_REF: ${{ github.base_ref || 'dev' }}
+        run: |
+          if ! git rev-parse --verify "origin/${BASE_REF}" >/dev/null 2>&1; then
+            echo "⚠️ 检查空白错误 | 找不到对比分支，跳过" >> quick_summary.log
+            exit 0
+          fi
+          if ! git diff --check "origin/${BASE_REF}...HEAD"; then
+            echo "❌ 存在空白错误" | tee -a quick_errors.log
+            echo "❌ 检查空白错误 | 存在行尾空格或 Tab 混用" >> quick_summary.log
+            exit 1
+          fi
+          echo "✅ 检查空白错误 | 无空白错误" >> quick_summary.log
+
+      - name: 上传快速检查汇总
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quick-check-results
+          path: |
+            quick_errors.log
+            quick_summary.log
+          if-no-files-found: ignore
+          retention-days: 1
+
+  swiftlint:
+    name: SwiftLint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 准备 SwiftLint 配置
+        run: |
+          if [ ! -f .swiftlint.yml ]; then
+            printf 'disabled_rules:\n  - trailing_whitespace\n  - line_length\nopt_in_rules:\n  - force_unwrapping\n  - empty_count\n  - closure_spacing\n' > .swiftlint.yml
+          fi
+
+      - name: 运行 SwiftLint
+        continue-on-error: true
+        run: |
+          for i in 1 2 3; do
+            if docker pull ghcr.io/realm/swiftlint:0.57.1; then break; fi
+            sleep 5
+          done
+          docker run --rm -v "$PWD:/work" -w /work \
+            ghcr.io/realm/swiftlint:0.57.1 \
+            swiftlint lint --strict --quiet --reporter json > swiftlint.json || true
+
+      - name: 上传 SwiftLint JSON
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: swiftlint-json
+          path: swiftlint.json
+          if-no-files-found: ignore
+          retention-days: 1
+
+  # ========== 第二阶段：iOS 构建（macOS，依赖门禁通过）==========
+  build-ios:
+    name: 构建 SFI iOS 未签名 IPA
+    needs: [quick-check, swiftlint]
+    if: |
+      always() &&
+      needs.quick-check.result == 'success' &&
+      needs.swiftlint.result == 'success'
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: 检出 SFI 代码
+        uses: actions/checkout@v4
+        with:
+          path: sfi
+          submodules: recursive
+
+      - name: 验证 git submodule 状态
+        working-directory: sfi
+        run: |
+          git submodule status
+          echo "=== Runestone 内容 ==="
+          ls -la Frameworks/Runestone/ || echo "Runestone 目录不存在"
+          test -f Frameworks/Runestone/Package.swift && echo "✅ Runestone Package.swift 存在" || echo "❌ Runestone Package.swift 缺失"
+
+      - name: 检出 sing-box 核心代码
+        uses: actions/checkout@v4
+        with:
+          repository: lambret-1/SFI-MITM
+          ref: sing-box
+          token: ${{ secrets.GITHUB_TOKEN }}
+          path: sing-box-core
+
+      - name: 计算 sing-box 核心 commit hash
+        id: core-sha
+        run: |
+          CORE_SHA=$(cd sing-box-core && git rev-parse HEAD)
+          echo "core_sha=$CORE_SHA" >> $GITHUB_OUTPUT
+          echo "core_sha_short=${CORE_SHA:0:8}" >> $GITHUB_OUTPUT
+
+      - name: 设置 Go 环境
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: sing-box-core/go.sum
+
+      - name: 缓存 gomobile
+        uses: actions/cache@v4
+        with:
+          path: ~/go/bin
+          key: ${{ runner.os }}-gomobile-${{ env.GO_VERSION }}
+
+      - name: 安装 gomobile
+        run: |
+          if [ ! -f ~/go/bin/gomobile ]; then
+            go install github.com/sagernet/gomobile/cmd/gomobile@latest
+            gomobile init
+          fi
+
+      - name: 恢复 Libbox.xcframework 缓存
+        id: cache-libbox
+        uses: actions/cache/restore@v4
+        with:
+          path: sing-box-core/Libbox.xcframework
+          key: libbox-ios-arm64-${{ steps.core-sha.outputs.core_sha }}
+          restore-keys: libbox-ios-arm64-
+
+      - name: 构建 Libbox（缓存未命中时）
+        if: steps.cache-libbox.outputs.cache-hit != 'true'
+        working-directory: sing-box-core
+        run: |
+          go run ./cmd/internal/build_libbox -target apple -platform ios
+          rm -rf Libbox.xcframework/ios-arm64_x86_64-simulator
+          du -sh Libbox.xcframework
+
+      - name: 保存 Libbox.xcframework 缓存（无论后续构建成败）
+        if: always() && steps.cache-libbox.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: sing-box-core/Libbox.xcframework
+          key: libbox-ios-arm64-${{ steps.core-sha.outputs.core_sha }}
+
+      - name: 复制 Libbox 到项目
+        run: |
+          rm -rf sfi/Libbox.xcframework
+          cp -R sing-box-core/Libbox.xcframework sfi/Libbox.xcframework
+
+      - name: 解析 Swift 包依赖
+        working-directory: sfi
+        run: |
+          rm -rf build/DerivedData
+          xcodebuild \
+            -project sing-box.xcodeproj \
+            -scheme "${{ env.XCODE_SCHEME }}" \
+            -resolvePackageDependencies 2>&1 | tail -20
+          echo "✅ 包依赖解析完成"
+
+      - name: 构建 SFI iOS App
+        working-directory: sfi
+        run: |
+          set +e
+          xcodebuild \
+            -project sing-box.xcodeproj \
+            -scheme "${{ env.XCODE_SCHEME }}" \
+            -configuration "${{ env.BUILD_CONFIGURATION }}" \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "${{ env.DERIVED_DATA_PATH }}" \
+            -disableAutomaticPackageResolution \
+            -skipPackageUpdates \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=NO \
+            DEBUG_INFORMATION_FORMAT=dwarf \
+            BUILD_LIBRARY_FOR_DISTRIBUTION=NO \
+            SWIFT_OPTIMIZATION_LEVEL=-O \
+            CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO AD_HOC_CODE_SIGNING_ALLOWED=YES \
+            build > build.log 2>&1
+          BUILD_EXIT=$?
+          set -e
+          if [ "$BUILD_EXIT" -ne 0 ]; then
+            echo "❌ xcodebuild 构建失败"
+            grep -n "error:" build.log | head -40
+            tail -50 build.log
+            exit 1
+          fi
+          echo "✅ xcodebuild 构建成功"
+
+      - name: 打包 IPA（ldid 注入 entitlements）
+        working-directory: sfi
+        run: |
+          brew list ldid &>/dev/null || brew install ldid
+          APP_PATH=$(find "${{ env.DERIVED_DATA_PATH }}/Build/Products" -name "sing-box.app" -type d | head -1)
+          rm -rf Payload && mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          find Payload -name "_CodeSignature" -type d -exec rm -rf {} + 2>/dev/null || true
+          find Payload -name "embedded.mobileprovision" -delete 2>/dev/null || true
+
+          # 注入主 App entitlements
+          ldid -S"SFI/SFI.entitlements" "Payload/sing-box.app/sing-box"
+          echo "✅ 主 App entitlements 已注入"
+
+          # 注入所有 Extension entitlements
+          for APPEX in Payload/sing-box.app/PlugIns/*.appex; do
+            [ -d "$APPEX" ] || continue
+            APPEX_NAME=$(basename "$APPEX" .appex)
+            BINARY_NAME=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APPEX/Info.plist" 2>/dev/null || echo "$APPEX_NAME")
+            ENT_FILE="Extension/Extension.entitlements"
+            case "$APPEX_NAME" in
+              *FileProvider*) ENT_FILE="FileProviderExtension/FileProviderExtension.entitlements" ;;
+              *Intents*) ENT_FILE="IntentsExtension/IntentsExtension.entitlements" ;;
+            esac
+            if [ -f "$APPEX/$BINARY_NAME" ] && [ -f "$ENT_FILE" ]; then
+              ldid -S"$ENT_FILE" "$APPEX/$BINARY_NAME"
+              echo "✅ $APPEX_NAME entitlements 已注入"
+            fi
+          done
+
+          zip -r -y SFI-TrollStore.ipa Payload/
+          rm -rf Payload
+          IPA_SIZE=$(stat -f%z SFI-TrollStore.ipa)
+          echo "IPA_SIZE=$IPA_SIZE" >> $GITHUB_ENV
+          echo "✅ IPA 打包完成: $(ls -lh SFI-TrollStore.ipa | awk '{print $5}')"
+
+      - name: 上传 IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: SFI-TrollStore.ipa
+          path: sfi/SFI-TrollStore.ipa
+          retention-days: 30
+
+      - name: 上传构建日志（失败时）
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            sfi/build.log
+            sfi/${{ env.DERIVED_DATA_PATH }}/Logs/
+          retention-days: 7
+
+  # ========== 第三阶段：生成报告与最终判定 ==========
+  report:
+    name: 生成报告与最终判定
+    needs: [quick-check, swiftlint, build-ios]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 下载快速检查结果
+        uses: actions/download-artifact@v4
+        with:
+          name: quick-check-results
+          path: ./artifacts/quick-check
+
+      - name: 下载 SwiftLint 结果
+        uses: actions/download-artifact@v4
+        with:
+          name: swiftlint-json
+          path: ./artifacts/swiftlint
+
+      - name: 生成可视化报告
+        run: |
+          cat << 'PYTHON_SCRIPT' > /tmp/generate_report.py
+          import json, os, collections
+          from datetime import datetime, timezone, timedelta
+
+          quick_summary = []
+          if os.path.exists('./artifacts/quick-check/quick_summary.log'):
+              with open('./artifacts/quick-check/quick_summary.log', 'r', encoding='utf-8') as f:
+                  quick_summary = [line.strip() for line in f if line.strip()]
+
+          quick_errors = []
+          if os.path.exists('./artifacts/quick-check/quick_errors.log'):
+              with open('./artifacts/quick-check/quick_errors.log', 'r', encoding='utf-8') as f:
+                  quick_errors = [line.strip() for line in f if line.strip()]
+
+          swiftlint_issues = []
+          if os.path.exists('./artifacts/swiftlint/swiftlint.json'):
+              try:
+                  with open('./artifacts/swiftlint/swiftlint.json', 'r', encoding='utf-8') as f:
+                      swiftlint_issues = json.load(f)
+              except Exception:
+                  pass
+
+          swift_errors = [i for i in swiftlint_issues if i.get('severity', '').lower() == 'error']
+          swift_warnings = [i for i in swiftlint_issues if i.get('severity', '').lower() == 'warning']
+          static_fails = sum(1 for line in quick_summary if line.startswith('❌'))
+          total_errors = static_fails + len(swift_errors)
+          total_warnings = len(swift_warnings)
+
+          china_tz = timezone(timedelta(hours=8))
+          china_time = datetime.now(china_tz).strftime('%Y-%m-%d %H:%M:%S')
+
+          md = []
+          md.append("# 🚀 CI 全流程检查汇总报告\n")
+          md.append("> 门禁检查 + iOS 构建一体化流水线，含静态检查、SwiftLint 与构建结果。\n")
+          md.append(f"**更新时间 (中国标准时间)**: `{china_time}`\n")
+          md.append("## 📊 总体统计\n")
+          md.append(f"- 🔴 **严重错误**: {total_errors}")
+          md.append(f"  - 静态检查: {static_fails}")
+          md.append(f"  - SwiftLint: {len(swift_errors)}")
+          md.append(f"- 🟡 **警告**: {total_warnings}\n")
+
+          md.append("## 🧱 静态检查详情\n")
+          md.append("| 检查项 | 状态 | 详情 |")
+          md.append("| :--- | :---: | :--- |")
+          for line in quick_summary:
+              icon = '❌ 失败' if line.startswith('❌') else ('⚠️ 警告' if line.startswith('⚠️') else '✅ 通过')
+              parts = line.split('|', 1)
+              name = parts[0].replace('❌', '').replace('⚠️', '').replace('✅', '').strip()
+              detail = parts[1].strip() if len(parts) > 1 else ''
+              md.append(f"| {name} | {icon} | {detail} |")
+          md.append("")
+
+          md.append("## 🔍 SwiftLint 检查汇总\n")
+          if len(swift_errors) == 0 and len(swift_warnings) == 0:
+              md.append("| SwiftLint 代码规范 | ✅ 通过 | 未发现任何问题 |\n")
+          elif len(swift_errors) > 0:
+              md.append(f"| SwiftLint 代码规范 | ❌ 失败 | 发现 {len(swift_errors)} 个错误, {len(swift_warnings)} 个警告 |\n")
+          else:
+              md.append(f"| SwiftLint 代码规范 | ⚠️ 警告 | 发现 {len(swift_warnings)} 个警告 |\n")
+
+          content = "\n".join(md)
+          os.makedirs('log', exist_ok=True)
+          with open('log/README.md', 'w', encoding='utf-8') as f:
+              f.write(content)
+
+          summary_path = os.environ.get('GITHUB_STEP_SUMMARY')
+          if summary_path:
+              with open(summary_path, 'a', encoding='utf-8') as f:
+                  f.write(content)
+
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write(f"TOTAL_ERRORS={total_errors}\n")
+          print("✅ 报告已生成")
+          PYTHON_SCRIPT
+          python3 /tmp/generate_report.py
+
+      - name: 推送报告到仓库
+        if: always() && (github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository))
+        run: |
+          TARGET_BRANCH="${{ github.head_ref || github.ref_name }}"
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add log/README.md
+          git commit -m "docs: 自动更新 CI 检查报告 [skip ci]" --allow-empty
+          git push origin HEAD:$TARGET_BRANCH || echo "⚠️ 报告推送失败（可能是分支保护）"
+
+      - name: 最终判定
+        run: |
+          if [ "${{ env.TOTAL_ERRORS }}" != "0" ] && [ "${{ env.TOTAL_ERRORS }}" != "" ]; then
+            echo "❌ 检查未通过，共发现 ${{ env.TOTAL_ERRORS }} 个严重错误"
+            exit 1
+          fi
+          echo "✅ 所有检查通过"
