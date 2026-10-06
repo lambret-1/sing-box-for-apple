@@ -324,14 +324,20 @@ jobs:
           GHOSTTY_FILE="build/DerivedData/SourcePackages/checkouts/libghostty-spm/Sources/GhosttyTerminal/Platform/UIKit/InputAccessory/TerminalInputAccessoryView.swift"
           if [ -f "$GHOSTTY_FILE" ]; then
             echo "✅ 找到libghostty-spm源码，开始修复UIGlassEffect"
-            # 将UIGlassEffect替换为UIBlurEffect
-            sed -i '' 's/let effect = UIGlassEffect(style: .regular)/let effect = UIBlurEffect(style: .systemUltraThinMaterial)/g' "$GHOSTTY_FILE"
-            # 注释掉isInteractive（iOS26+ API）
-            sed -i '' 's/effect.isInteractive = true/\/\/ effect.isInteractive = true \/\/ iOS26+ API/g' "$GHOSTTY_FILE"
-            echo "✅ UIGlassEffect已替换为UIBlurEffect"
-            grep -n "UIBlurEffect\|UIGlassEffect" "$GHOSTTY_FILE" | head -5
+            echo "=== 修复前UIGlassEffect出现次数 ==="
+            grep -c "UIGlassEffect" "$GHOSTTY_FILE" || echo "0"
+            # 使用perl替换UIGlassEffect为UIBlurEffect（perl正则更可靠）
+            perl -i -pe 's/UIGlassEffect\(style: \.regular\)/UIBlurEffect(style: .systemUltraThinMaterial)/g' "$GHOSTTY_FILE"
+            # 注释掉isInteractive属性
+            perl -i -pe 's/effect\.isInteractive = true/\/\/ effect.isInteractive = true \/\/ iOS26+ API/g' "$GHOSTTY_FILE"
+            echo "=== 修复后UIGlassEffect出现次数 ==="
+            grep -c "UIGlassEffect" "$GHOSTTY_FILE" || echo "0"
+            echo "=== 修复后UIBlurEffect出现次数 ==="
+            grep -c "UIBlurEffect" "$GHOSTTY_FILE" || echo "0"
+            echo "✅ UIGlassEffect修复完成"
           else
-            echo "⚠️ 未找到libghostty-spm源码文件"
+            echo "⚠️ 未找到libghostty-spm源码文件，列出目录结构："
+            find build/DerivedData/SourcePackages/checkouts/libghostty-spm -name "*.swift" | head -10
           fi
 
       - name: 构建 SFI iOS App
